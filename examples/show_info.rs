@@ -4,7 +4,7 @@ use std::time::Duration;
 use linux_embedded_hal::serial_impl::Serial;
 use serial::{self, core::SerialPort};
 
-use rn2483::Rn2483;
+use rn2xx3::Rn2483;
 
 fn main() {
     println!("Hello, RN2483!");
