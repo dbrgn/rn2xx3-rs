@@ -4,10 +4,12 @@ use nb::block;
 const CR: u8 = 0x0d;
 const LF: u8 = 0x0a;
 
+/// The driver instance for both RN2483 and RN2903.
 pub struct Rn2xx3<S> {
     serial: S,
 }
 
+/// A collection of all errors that can occur.
 #[derive(Debug)]
 pub enum Error {
     /// Could not read from serial port.
@@ -16,6 +18,15 @@ pub enum Error {
     SerialWrite,
     /// Command contained invalid UTF-8.
     EncodingError,
+    /// A response could not be parsed.
+    ParsingError,
+}
+
+/// List of all supported RN module models.
+#[derive(Debug)]
+pub enum Model {
+    RN2483,
+    RN2903,
 }
 
 impl From<std::string::FromUtf8Error> for Error {
@@ -24,10 +35,12 @@ impl From<std::string::FromUtf8Error> for Error {
     }
 }
 
+/// Basic commands.
 impl<S, E> Rn2xx3<S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
+    /// Create a new driver, wrapping the specified serial port.
     pub fn new(serial: S) -> Self {
         Self { serial }
     }
@@ -84,9 +97,36 @@ where
         self.write_all(command.as_bytes(), true)?;
         self.read_line()
     }
+}
 
+/// Query system information.
+impl<S, E> Rn2xx3<S>
+where
+    S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
+{
     /// Return the preprogrammed EUI node address as uppercase hex string.
     pub fn hweui(&mut self) -> Result<String, Error> {
         self.send_raw_command("sys get hweui")
+    }
+
+    /// Return the version string.
+    pub fn version(&mut self) -> Result<String, Error> {
+        self.send_raw_command("sys get ver")
+    }
+
+    /// Return the model of the module.
+    pub fn model(&mut self) -> Result<Model, Error> {
+        let version = self.version()?;
+        match &version[0..6] {
+            "RN2483" => Ok(Model::RN2483),
+            "RN2903" => Ok(Model::RN2903),
+            _ => Err(Error::ParsingError),
+        }
+    }
+
+    /// Measure and return the Vdd voltage in millivolts.
+    pub fn vdd(&mut self) -> Result<u16, Error> {
+        let vdd = self.send_raw_command("sys get vdd")?;
+        vdd.parse().map_err(|_| Error::ParsingError)
     }
 }

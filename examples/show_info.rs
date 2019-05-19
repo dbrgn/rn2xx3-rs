@@ -36,4 +36,7 @@ fn main() {
     let mut rn = Rn2xx3::new(Serial(port));
     println!("== Device info ==\n");
     println!("     HW-EUI: {}", rn.hweui().expect("Could not read hweui"));
+    println!("      Model: {:?}", rn.model().expect("Could not read model"));
+    println!("    Version: {}", rn.version().expect("Could not read version"));
+    println!("Vdd voltage: {} mV", rn.vdd().expect("Could not read vdd"));
 }
