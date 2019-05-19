@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use linux_embedded_hal::serial_impl::Serial;
+use linux_embedded_hal::Serial;
 use rn2xx3::Rn2xx3;
 use serial::{self, core::SerialPort};
 
