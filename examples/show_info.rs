@@ -4,11 +4,9 @@ use std::time::Duration;
 use linux_embedded_hal::serial_impl::Serial;
 use serial::{self, core::SerialPort};
 
-use rn2xx3::Rn2483;
+use rn2xx3::Rn2xx3;
 
 fn main() {
-    println!("Hello, RN2483!");
-
     // Parse args
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
@@ -35,6 +33,7 @@ fn main() {
         .expect("Could not set serial port timeout");
 
     // Initialize driver
-    let mut rn = Rn2483::new(Serial(port));
-    println!("hweui: {}", rn.hweui().expect("Could not read hweui"));
+    let mut rn = Rn2xx3::new(Serial(port));
+    println!("== Device info ==\n");
+    println!("     HW-EUI: {}", rn.hweui().expect("Could not read hweui"));
 }

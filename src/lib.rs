@@ -4,7 +4,7 @@ use nb::block;
 const CR: u8 = 0x0d;
 const LF: u8 = 0x0a;
 
-pub struct Rn2483<S> {
+pub struct Rn2xx3<S> {
     serial: S,
 }
 
@@ -24,7 +24,7 @@ impl From<std::string::FromUtf8Error> for Error {
     }
 }
 
-impl<S, E> Rn2483<S>
+impl<S, E> Rn2xx3<S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
