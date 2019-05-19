@@ -22,6 +22,9 @@ pub enum Error {
     ParsingError,
 }
 
+/// A `Result<T, Error>`.
+pub type RnResult<T> = Result<T, Error>;
+
 /// List of all supported RN module models.
 #[derive(Debug)]
 pub enum Model {
@@ -46,12 +49,12 @@ where
     }
 
     /// Write a single byte to the serial port.
-    fn write_byte(&mut self, byte: u8) -> Result<(), Error> {
+    fn write_byte(&mut self, byte: u8) -> RnResult<()> {
         block!(self.serial.write(byte)).map_err(|_| Error::SerialWrite)
     }
 
     /// Write all bytes from the buffer to the serial port.
-    fn write_all(&mut self, buffer: &[u8], crlf: bool) -> Result<(), Error> {
+    fn write_all(&mut self, buffer: &[u8], crlf: bool) -> RnResult<()> {
         for byte in buffer {
             self.write_byte(*byte)?;
         }
@@ -63,14 +66,14 @@ where
     }
 
     /// Read a single byte from the serial port.
-    fn read_byte(&mut self) -> Result<u8, Error> {
+    fn read_byte(&mut self) -> RnResult<u8> {
         block!(self.serial.read()).map_err(|_| Error::SerialRead)
     }
 
     /// Read a CR/LF terminated line from the serial port.
     ///
     /// The string is returned without the line termination.
-    fn read_line(&mut self) -> Result<String, Error> {
+    fn read_line(&mut self) -> RnResult<String> {
         let mut buf: Vec<u8> = vec![];
         let mut cr_read = false;
         loop {
@@ -93,7 +96,7 @@ where
     }
 
     /// Send a raw command to the module and return the response.
-    pub fn send_raw_command(&mut self, command: &str) -> Result<String, Error> {
+    pub fn send_raw_command(&mut self, command: &str) -> RnResult<String> {
         self.write_all(command.as_bytes(), true)?;
         self.read_line()
     }
@@ -105,17 +108,17 @@ where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
     /// Return the preprogrammed EUI node address as uppercase hex string.
-    pub fn hweui(&mut self) -> Result<String, Error> {
+    pub fn hweui(&mut self) -> RnResult<String> {
         self.send_raw_command("sys get hweui")
     }
 
     /// Return the version string.
-    pub fn version(&mut self) -> Result<String, Error> {
+    pub fn version(&mut self) -> RnResult<String> {
         self.send_raw_command("sys get ver")
     }
 
     /// Return the model of the module.
-    pub fn model(&mut self) -> Result<Model, Error> {
+    pub fn model(&mut self) -> RnResult<Model> {
         let version = self.version()?;
         match &version[0..6] {
             "RN2483" => Ok(Model::RN2483),
@@ -125,7 +128,7 @@ where
     }
 
     /// Measure and return the Vdd voltage in millivolts.
-    pub fn vdd(&mut self) -> Result<u16, Error> {
+    pub fn vdd(&mut self) -> RnResult<u16> {
         let vdd = self.send_raw_command("sys get vdd")?;
         vdd.parse().map_err(|_| Error::ParsingError)
     }
