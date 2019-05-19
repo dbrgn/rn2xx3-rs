@@ -57,7 +57,10 @@ where
 {
     /// Create a new driver, wrapping the specified serial port.
     pub fn new(serial: S) -> Self {
-        Self { serial, read_buf: [0; 64] }
+        Self {
+            serial,
+            read_buf: [0; 64],
+        }
     }
 
     /// Write a single byte to the serial port.
@@ -92,7 +95,7 @@ where
         loop {
             match self.read_byte()? {
                 LF if self.read_buf[i - 1] == CR => {
-                    return Ok(&self.read_buf[0..i-1]);
+                    return Ok(&self.read_buf[0..(i - 1)]);
                 }
                 other => {
                     self.read_buf[i] = other;

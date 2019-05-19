@@ -17,8 +17,12 @@ fn main() {
 
     // Show device info
     println!("== Device info ==\n");
-    println!("     HW-EUI: {}", rn.hweui().expect("Could not read hweui"));
-    println!("      Model: {:?}", rn.model().expect("Could not read model"));
-    println!("    Version: {}", rn.version().expect("Could not read version"));
-    println!("Vdd voltage: {} mV", rn.vdd().expect("Could not read vdd"));
+    let hweui = rn.hweui().expect("Could not read hweui");
+    println!("     HW-EUI: {}", hweui);
+    let model = rn.model().expect("Could not read model");
+    println!("      Model: {:?}", model);
+    let version = rn.version().expect("Could not read version");
+    println!("    Version: {}", version);
+    let vdd = rn.vdd().expect("Could not read vdd");
+    println!("Vdd voltage: {} mV", vdd);
 }
