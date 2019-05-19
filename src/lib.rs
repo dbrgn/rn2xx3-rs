@@ -1,4 +1,4 @@
-use core::str::from_utf8;
+use core::str::{from_utf8, Utf8Error};
 
 use base16;
 use embedded_hal::serial;
@@ -6,10 +6,12 @@ use nb::block;
 
 const CR: u8 = 0x0d;
 const LF: u8 = 0x0a;
+const OK: [u8; 2] = [b'o', b'k'];
 
 /// The driver instance for both RN2483 and RN2903.
 pub struct Rn2xx3<S> {
     serial: S,
+    read_buf: [u8; 64],
 }
 
 /// A collection of all errors that can occur.
@@ -27,6 +29,9 @@ pub enum Error {
     CommandFailed,
     /// Bad address.
     BadAddress,
+    /// Read buffer is too small.
+    /// This is a bug, please report it on GitHub!
+    ReadBufferTooSmall,
 }
 
 /// A `Result<T, Error>`.
@@ -39,8 +44,8 @@ pub enum Model {
     RN2903,
 }
 
-impl From<std::string::FromUtf8Error> for Error {
-    fn from(_: std::string::FromUtf8Error) -> Self {
+impl From<Utf8Error> for Error {
+    fn from(_: Utf8Error) -> Self {
         Error::EncodingError
     }
 }
@@ -52,7 +57,7 @@ where
 {
     /// Create a new driver, wrapping the specified serial port.
     pub fn new(serial: S) -> Self {
-        Self { serial }
+        Self { serial, read_buf: [0; 64] }
     }
 
     /// Write a single byte to the serial port.
@@ -81,30 +86,27 @@ where
     /// Read a CR/LF terminated line from the serial port.
     ///
     /// The string is returned without the line termination.
-    fn read_line(&mut self) -> RnResult<String> {
-        let mut buf: Vec<u8> = vec![];
-        let mut cr_read = false;
+    fn read_line(&mut self) -> RnResult<&[u8]> {
+        let buflen = self.read_buf.len();
+        let mut i = 0;
         loop {
             match self.read_byte()? {
-                CR => {
-                    cr_read = true;
-                    buf.push(CR);
-                }
-                LF if cr_read => {
-                    // Remove CR
-                    buf.remove(buf.len() - 1);
-                    return Ok(String::from_utf8(buf)?);
+                LF if self.read_buf[i - 1] == CR => {
+                    return Ok(&self.read_buf[0..i-1]);
                 }
                 other => {
-                    cr_read = false;
-                    buf.push(other);
+                    self.read_buf[i] = other;
                 }
+            }
+            i += 1;
+            if i >= buflen {
+                return Err(Error::ReadBufferTooSmall);
             }
         }
     }
 
     /// Send a raw command to the module and return the response.
-    pub fn send_raw_command(&mut self, command: &[&str]) -> RnResult<String> {
+    pub fn send_raw_command(&mut self, command: &[&str]) -> RnResult<&[u8]> {
         for part in command {
             self.write_all(part.as_bytes())?;
         }
@@ -112,12 +114,20 @@ where
         self.read_line()
     }
 
+    /// Send a raw command and decode the resulting bytes to a `&str`.
+    pub fn send_raw_command_str(&mut self, command: &[&str]) -> RnResult<&str> {
+        let bytes = self.send_raw_command(command)?;
+        Ok(from_utf8(bytes)?)
+    }
+
     /// Send a raw command that should be confirmed with 'OK'. If the response
     /// is not 'OK', return `Error::CommandFailed`.
-    fn send_raw_ok_command(&mut self, command: &[&str]) -> RnResult<()> {
-        match &*self.send_raw_command(command)? {
-            "ok" => Ok(()),
-            _ => Err(Error::CommandFailed),
+    fn send_raw_command_ok(&mut self, command: &[&str]) -> RnResult<()> {
+        let response = self.send_raw_command(command)?;
+        if response == &OK {
+            Ok(())
+        } else {
+            Err(Error::CommandFailed)
         }
     }
 }
@@ -128,8 +138,8 @@ where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
     /// Reset and restart the RN module. Return the version string.
-    pub fn reset(&mut self) -> RnResult<String> {
-        self.send_raw_command(&["sys reset"])
+    pub fn reset(&mut self) -> RnResult<&str> {
+        self.send_raw_command_str(&["sys reset"])
     }
 
     /// Reset the module's configuration data and user EEPROM to factory
@@ -137,8 +147,8 @@ where
     ///
     /// All configuration parameters will be restored to factory default
     /// values. Return the version string.
-    pub fn factory_reset(&mut self) -> RnResult<String> {
-        self.send_raw_command(&["sys factoryRESET"])
+    pub fn factory_reset(&mut self) -> RnResult<&str> {
+        self.send_raw_command_str(&["sys factoryRESET"])
     }
 
     ///// Delete the current RN2483 module application firmware and prepare it
@@ -154,13 +164,13 @@ where
     //}
 
     /// Return the preprogrammed EUI node address as uppercase hex string.
-    pub fn hweui(&mut self) -> RnResult<String> {
-        self.send_raw_command(&["sys get hweui"])
+    pub fn hweui(&mut self) -> RnResult<&str> {
+        self.send_raw_command_str(&["sys get hweui"])
     }
 
     /// Return the version string.
-    pub fn version(&mut self) -> RnResult<String> {
-        self.send_raw_command(&["sys get ver"])
+    pub fn version(&mut self) -> RnResult<&str> {
+        self.send_raw_command_str(&["sys get ver"])
     }
 
     /// Return the model of the module.
@@ -175,7 +185,7 @@ where
 
     /// Measure and return the Vdd voltage in millivolts.
     pub fn vdd(&mut self) -> RnResult<u16> {
-        let vdd = self.send_raw_command(&["sys get vdd"])?;
+        let vdd = self.send_raw_command_str(&["sys get vdd"])?;
         vdd.parse().map_err(|_| Error::ParsingError)
     }
 
@@ -192,7 +202,7 @@ where
         let hex_byte_bytes = [h, l];
         let hex_byte = from_utf8(&hex_byte_bytes).unwrap();
         let args = ["sys set nvm ", &hex_addr, " ", &hex_byte];
-        self.send_raw_ok_command(&args)
+        self.send_raw_command_ok(&args)
     }
 
     /// Get the NVM byte at `addr`.
@@ -204,13 +214,12 @@ where
             return Err(Error::BadAddress);
         }
         let hex_addr = format!("{:x}", addr);
-        let hex_byte = self.send_raw_command(&["sys get nvm ", &hex_addr])?;
-        if hex_byte.len() != 2 {
+        let response = self.send_raw_command(&["sys get nvm ", &hex_addr])?;
+        if response.len() != 2 {
             return Err(Error::ParsingError);
         }
         let mut buf = [0; 1];
-        base16::decode_slice(hex_byte.as_bytes(), &mut buf)
-            .map_err(|_| Error::ParsingError)?;
+        base16::decode_slice(response, &mut buf).map_err(|_| Error::ParsingError)?;
         Ok(buf[0])
     }
 }
