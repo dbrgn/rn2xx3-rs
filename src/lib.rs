@@ -38,7 +38,7 @@ pub enum Error {
 pub type RnResult<T> = Result<T, Error>;
 
 /// List of all supported RN module models.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Model {
     RN2483,
     RN2903,
@@ -224,5 +224,55 @@ where
         let mut buf = [0; 1];
         base16::decode_slice(response, &mut buf).map_err(|_| Error::ParsingError)?;
         Ok(buf[0])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use embedded_hal_mock::serial::{Mock as SerialMock, Transaction};
+
+    const VERSION48: &str = "RN2483 1.0.3 Mar 22 2017 06:00:42";
+    const VERSION90: &str = "RN2903 1.0.3 Mar 22 2017 06:00:42";
+    const CRLF: &str = "\r\n";
+
+    #[test]
+    fn version() {
+        let expectations = [
+            Transaction::write_many(b"sys get ver\r\n"),
+            Transaction::read_many(VERSION48.as_bytes()),
+            Transaction::read_many(CRLF.as_bytes()),
+        ];
+        let mut mock = SerialMock::new(&expectations);
+        let mut rn = Rn2xx3::new(mock.clone());
+        assert_eq!(rn.version().unwrap(), VERSION48);
+        mock.done();
+    }
+
+    #[test]
+    fn model_rn2483() {
+        let expectations = [
+            Transaction::write_many(b"sys get ver\r\n"),
+            Transaction::read_many(VERSION48.as_bytes()),
+            Transaction::read_many(CRLF.as_bytes()),
+        ];
+        let mut mock = SerialMock::new(&expectations);
+        let mut rn = Rn2xx3::new(mock.clone());
+        assert_eq!(rn.model().unwrap(), Model::RN2483);
+        mock.done();
+    }
+
+    #[test]
+    fn model_rn2903() {
+        let expectations = [
+            Transaction::write_many(b"sys get ver\r\n"),
+            Transaction::read_many(VERSION90.as_bytes()),
+            Transaction::read_many(CRLF.as_bytes()),
+        ];
+        let mut mock = SerialMock::new(&expectations);
+        let mut rn = Rn2xx3::new(mock.clone());
+        assert_eq!(rn.model().unwrap(), Model::RN2903);
+        mock.done();
     }
 }

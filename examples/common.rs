@@ -24,3 +24,8 @@ pub fn init_rn(dev: &str) -> Rn2xx3<Serial> {
     // Initialize driver
     Rn2xx3::new(Serial(port))
 }
+
+#[allow(dead_code)]
+pub fn main() {
+    // Not a real example!
+}
