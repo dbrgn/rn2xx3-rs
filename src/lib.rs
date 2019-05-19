@@ -1,3 +1,6 @@
+use core::str::from_utf8;
+
+use base16;
 use embedded_hal::serial;
 use nb::block;
 
@@ -20,6 +23,10 @@ pub enum Error {
     EncodingError,
     /// A response could not be parsed.
     ParsingError,
+    /// A command failed.
+    CommandFailed,
+    /// Bad address.
+    BadAddress,
 }
 
 /// A `Result<T, Error>`.
@@ -53,14 +60,15 @@ where
         block!(self.serial.write(byte)).map_err(|_| Error::SerialWrite)
     }
 
+    fn write_crlf(&mut self) -> RnResult<()> {
+        self.write_byte(CR)?;
+        self.write_byte(LF)
+    }
+
     /// Write all bytes from the buffer to the serial port.
-    fn write_all(&mut self, buffer: &[u8], crlf: bool) -> RnResult<()> {
+    fn write_all(&mut self, buffer: &[u8]) -> RnResult<()> {
         for byte in buffer {
             self.write_byte(*byte)?;
-        }
-        if crlf {
-            self.write_byte(CR)?;
-            self.write_byte(LF)?;
         }
         Ok(())
     }
@@ -96,25 +104,63 @@ where
     }
 
     /// Send a raw command to the module and return the response.
-    pub fn send_raw_command(&mut self, command: &str) -> RnResult<String> {
-        self.write_all(command.as_bytes(), true)?;
+    pub fn send_raw_command(&mut self, command: &[&str]) -> RnResult<String> {
+        for part in command {
+            self.write_all(part.as_bytes())?;
+        }
+        self.write_crlf()?;
         self.read_line()
+    }
+
+    /// Send a raw command that should be confirmed with 'OK'. If the response
+    /// is not 'OK', return `Error::CommandFailed`.
+    fn send_raw_ok_command(&mut self, command: &[&str]) -> RnResult<()> {
+        match &*self.send_raw_command(command)? {
+            "ok" => Ok(()),
+            _ => Err(Error::CommandFailed),
+        }
     }
 }
 
-/// Query system information.
+/// System commands.
 impl<S, E> Rn2xx3<S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
+    /// Reset and restart the RN module. Return the version string.
+    pub fn reset(&mut self) -> RnResult<String> {
+        self.send_raw_command(&["sys reset"])
+    }
+
+    /// Reset the module's configuration data and user EEPROM to factory
+    /// default values and restart the module.
+    ///
+    /// All configuration parameters will be restored to factory default
+    /// values. Return the version string.
+    pub fn factory_reset(&mut self) -> RnResult<String> {
+        self.send_raw_command(&["sys factoryRESET"])
+    }
+
+    ///// Delete the current RN2483 module application firmware and prepare it
+    ///// for firmware upgrade. The module bootloader is then ready to receive
+    ///// new firmware.
+    /////
+    ///// This command is not unsafe in the sense of memory unsafety, but it can
+    ///// be dangerous because it removes the firmware.
+    //pub unsafe fn erase_fw(&mut self) -> RnResult<()> {
+    //    self.send_raw_command(&["sys eraseFW"])?;
+    //    TODO: Does this return anything?
+    //    Ok(())
+    //}
+
     /// Return the preprogrammed EUI node address as uppercase hex string.
     pub fn hweui(&mut self) -> RnResult<String> {
-        self.send_raw_command("sys get hweui")
+        self.send_raw_command(&["sys get hweui"])
     }
 
     /// Return the version string.
     pub fn version(&mut self) -> RnResult<String> {
-        self.send_raw_command("sys get ver")
+        self.send_raw_command(&["sys get ver"])
     }
 
     /// Return the model of the module.
@@ -129,7 +175,42 @@ where
 
     /// Measure and return the Vdd voltage in millivolts.
     pub fn vdd(&mut self) -> RnResult<u16> {
-        let vdd = self.send_raw_command("sys get vdd")?;
+        let vdd = self.send_raw_command(&["sys get vdd"])?;
         vdd.parse().map_err(|_| Error::ParsingError)
+    }
+
+    /// Set the NVM byte at `addr` to the specified value.
+    ///
+    /// The address must be between 0x300 and 0x3ff, otherwise
+    /// `Error::BadAddress` is returned.
+    pub fn nvm_set(&mut self, addr: u16, byte: u8) -> RnResult<()> {
+        if addr < 0x300 || addr > 0x3ff {
+            return Err(Error::BadAddress);
+        }
+        let hex_addr = format!("{:x}", addr);
+        let (h, l) = base16::encode_byte_l(byte);
+        let hex_byte_bytes = [h, l];
+        let hex_byte = from_utf8(&hex_byte_bytes).unwrap();
+        let args = ["sys set nvm ", &hex_addr, " ", &hex_byte];
+        self.send_raw_ok_command(&args)
+    }
+
+    /// Get the NVM byte at `addr`.
+    ///
+    /// The address must be between 0x300 and 0x3ff, otherwise
+    /// `Error::BadAddress` is returned.
+    pub fn nvm_get(&mut self, addr: u16) -> RnResult<u8> {
+        if addr < 0x300 || addr > 0x3ff {
+            return Err(Error::BadAddress);
+        }
+        let hex_addr = format!("{:x}", addr);
+        let hex_byte = self.send_raw_command(&["sys get nvm ", &hex_addr])?;
+        if hex_byte.len() != 2 {
+            return Err(Error::ParsingError);
+        }
+        let mut buf = [0; 1];
+        base16::decode_slice(hex_byte.as_bytes(), &mut buf)
+            .map_err(|_| Error::ParsingError)?;
+        Ok(buf[0])
     }
 }
