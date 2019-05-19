@@ -275,4 +275,28 @@ mod tests {
         assert_eq!(rn.model().unwrap(), Model::RN2903);
         mock.done();
     }
+
+    #[test]
+    fn nvm_set() {
+        let expectations = [
+            Transaction::write_many(b"sys set nvm 3ab 2a\r\n"),
+            Transaction::read_many(b"ok\r\n"),
+        ];
+        let mut mock = SerialMock::new(&expectations);
+        let mut rn = Rn2xx3::new(mock.clone());
+        rn.nvm_set(0x3ab, 42).unwrap();
+        mock.done();
+    }
+
+    #[test]
+    fn nvm_get() {
+        let expectations = [
+            Transaction::write_many(b"sys get nvm 300\r\n"),
+            Transaction::read_many(b"ff\r\n"),
+        ];
+        let mut mock = SerialMock::new(&expectations);
+        let mut rn = Rn2xx3::new(mock.clone());
+        assert_eq!(rn.nvm_get(0x300).unwrap(), 0xff);
+        mock.done();
+    }
 }
