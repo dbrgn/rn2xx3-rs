@@ -21,17 +21,17 @@ pub enum Error {
     SerialRead,
     /// Could not write to serial port.
     SerialWrite,
+    /// Read buffer is too small.
+    /// This is a bug, please report it on GitHub!
+    ReadBufferTooSmall,
     /// Command contained invalid UTF-8.
     EncodingError,
     /// A response could not be parsed.
     ParsingError,
     /// A command failed.
     CommandFailed,
-    /// Bad address.
-    BadAddress,
-    /// Read buffer is too small.
-    /// This is a bug, please report it on GitHub!
-    ReadBufferTooSmall,
+    /// A bad parameter was supplied.
+    BadParameter,
 }
 
 /// A `Result<T, Error>`.
@@ -195,10 +195,10 @@ where
     /// Set the NVM byte at `addr` to the specified value.
     ///
     /// The address must be between 0x300 and 0x3ff, otherwise
-    /// `Error::BadAddress` is returned.
+    /// `Error::BadParameter` is returned.
     pub fn nvm_set(&mut self, addr: u16, byte: u8) -> RnResult<()> {
         if addr < 0x300 || addr > 0x3ff {
-            return Err(Error::BadAddress);
+            return Err(Error::BadParameter);
         }
         let hex_addr = format!("{:x}", addr);
         let (h, l) = base16::encode_byte_l(byte);
@@ -211,10 +211,10 @@ where
     /// Get the NVM byte at `addr`.
     ///
     /// The address must be between 0x300 and 0x3ff, otherwise
-    /// `Error::BadAddress` is returned.
+    /// `Error::BadParameter` is returned.
     pub fn nvm_get(&mut self, addr: u16) -> RnResult<u8> {
         if addr < 0x300 || addr > 0x3ff {
-            return Err(Error::BadAddress);
+            return Err(Error::BadParameter);
         }
         let hex_addr = format!("{:x}", addr);
         let response = self.send_raw_command(&["sys get nvm ", &hex_addr])?;
@@ -224,6 +224,49 @@ where
         let mut buf = [0; 1];
         base16::decode_slice(response, &mut buf).map_err(|_| Error::ParsingError)?;
         Ok(buf[0])
+    }
+}
+
+/// MAC Set Commands.
+impl<S, E> Rn2xx3<S>
+where
+    S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
+{
+    /// Set the unique network device address.
+    ///
+    /// The parameter must be a 4-byte hex string representing the device
+    /// address, from 00000000 to FFFFFFFF.
+    pub fn set_devaddr_hex(&mut self, addr: &str) -> RnResult<()> {
+        if addr.len() != 8 {
+            return Err(Error::BadParameter);
+        }
+        self.send_raw_command_ok(&["mac set devaddr ", addr])
+    }
+
+    /// Set the unique network device address.
+    ///
+    /// The parameter is a 32 bit integer representing the device address.
+    pub fn set_devaddr_u32(&mut self, addr: u32) -> RnResult<()> {
+        let bytes = [
+            ((addr >> 24) & 0xff) as u8,
+            ((addr >> 16) & 0xff) as u8,
+            ((addr >> 8) & 0xff) as u8,
+            ((addr & 0xff) & 0xff) as u8,
+        ];
+        self.set_devaddr_slice(&bytes)
+    }
+
+    /// Set the unique network device address.
+    ///
+    /// The parameter is a 4-byte big endian byte slice representing the device
+    /// address.
+    pub fn set_devaddr_slice(&mut self, addr: &[u8]) -> RnResult<()> {
+        if addr.len() != 4 {
+            return Err(Error::BadParameter);
+        }
+        let mut buf = [0; 8];
+        base16::encode_config_slice(addr, base16::EncodeLower, &mut buf);
+        self.set_devaddr_hex(from_utf8(&buf)?)
     }
 }
 
@@ -297,6 +340,37 @@ mod tests {
         let mut mock = SerialMock::new(&expectations);
         let mut rn = Rn2xx3::new(mock.clone());
         assert_eq!(rn.nvm_get(0x300).unwrap(), 0xff);
+        mock.done();
+    }
+
+    fn _set_devaddr() -> (SerialMock<u8>, Rn2xx3<SerialMock<u8>>) {
+        let expectations = [
+            Transaction::write_many(b"mac set devaddr 010203ff\r\n"),
+            Transaction::read_many(b"ok\r\n"),
+        ];
+        let mock = SerialMock::new(&expectations);
+        let rn = Rn2xx3::new(mock.clone());
+        (mock, rn)
+    }
+
+    #[test]
+    fn set_devaddr_hex() {
+        let (mut mock, mut rn) = _set_devaddr();
+        assert!(rn.set_devaddr_hex("010203ff").is_ok());
+        mock.done();
+    }
+
+    #[test]
+    fn set_devaddr_u32() {
+        let (mut mock, mut rn) = _set_devaddr();
+        assert!(rn.set_devaddr_u32(16777216 + 131072 + 768 + 255).is_ok());
+        mock.done();
+    }
+
+    #[test]
+    fn set_devaddr_slice() {
+        let (mut mock, mut rn) = _set_devaddr();
+        assert!(rn.set_devaddr_slice(&[0x01, 0x02, 0x03, 0xff]).is_ok());
         mock.done();
     }
 }
