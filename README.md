@@ -3,6 +3,12 @@
 WIP
 
 
+## Datasheets
+
+- [RN2483](http://ww1.microchip.com/downloads/en/DeviceDoc/40001784B.pdf)
+- [RN2903](http://ww1.microchip.com/downloads/en/DeviceDoc/RN2903%20LoRa%20Technology%20Module%20Command%20Reference%20User%20Guide-DS40001811B.pdf)
+
+
 ## License
 
 Licensed under either of
