@@ -269,31 +269,44 @@ where
     hex_setter!(
         "devaddr", 4,
         "Set the unique network device address.",
-        set_devaddr_hex,
-        set_devaddr_slice,
+        set_dev_addr_hex,
+        set_dev_addr_slice,
     );
 
     hex_setter!(
         "deveui", 8,
         "Set the globally unique device identifier.",
-        set_deveui_hex,
-        set_deveui_slice,
+        set_dev_eui_hex,
+        set_dev_eui_slice,
     );
 
     hex_setter!(
         "appeui", 8,
         "Set the globally unique application identifier.",
-        set_appeui_hex,
-        set_appeui_slice,
+        set_app_eui_hex,
+        set_app_eui_slice,
     );
 
-//    /// Sets the globally unique identifier for the RN2483 module.
-//    pub fn set_deveui(&mut self) -> RnResult<()> {
-//    }
-//
-//    /// Sets the application identifier for the RN2483 module.
-//    pub fn set_appeui(&mut self) -> RnResult<()> {
-//    }
+    hex_setter!(
+        "nwkskey", 16,
+        "Set the network session key.",
+        set_network_session_key_hex,
+        set_network_session_key_slice,
+    );
+
+    hex_setter!(
+        "appskey", 16,
+        "Set the application session key.",
+        set_app_session_key_hex,
+        set_app_session_key_slice,
+    );
+
+    hex_setter!(
+        "appkey", 16,
+        "Set the application key.",
+        set_app_key_hex,
+        set_app_key_slice,
+    );
 }
 
 #[cfg(test)]
@@ -372,18 +385,18 @@ mod tests {
     /// Validate length of value passed to generated methods.
     /// Ensure that nothing is read/written to/from the serial device.
     #[test]
-    fn set_devaddr_bad_length() {
+    fn set_dev_addr_bad_length() {
         let expectations = [];
         let mut mock = SerialMock::new(&expectations);
         let mut rn = Rn2xx3::new(mock.clone());
-        assert_eq!(rn.set_devaddr_hex("010203f"), Err(Error::BadParameter));
-        assert_eq!(rn.set_devaddr_hex("010203fff"), Err(Error::BadParameter));
-        assert_eq!(rn.set_deveui_hex("0004a30b001a55e"), Err(Error::BadParameter));
-        assert_eq!(rn.set_deveui_hex("0004a30b001a55edx"), Err(Error::BadParameter));
+        assert_eq!(rn.set_dev_addr_hex("010203f"), Err(Error::BadParameter));
+        assert_eq!(rn.set_dev_addr_hex("010203fff"), Err(Error::BadParameter));
+        assert_eq!(rn.set_dev_eui_hex("0004a30b001a55e"), Err(Error::BadParameter));
+        assert_eq!(rn.set_dev_eui_hex("0004a30b001a55edx"), Err(Error::BadParameter));
         mock.done();
     }
 
-    fn _set_devaddr() -> (SerialMock<u8>, Rn2xx3<SerialMock<u8>>) {
+    fn _set_dev_addr() -> (SerialMock<u8>, Rn2xx3<SerialMock<u8>>) {
         let expectations = [
             Transaction::write_many(b"mac set devaddr 010203ff\r\n"),
             Transaction::read_many(b"ok\r\n"),
@@ -394,20 +407,20 @@ mod tests {
     }
 
     #[test]
-    fn set_devaddr_hex() {
-        let (mut mock, mut rn) = _set_devaddr();
-        assert!(rn.set_devaddr_hex("010203ff").is_ok());
+    fn set_dev_addr_hex() {
+        let (mut mock, mut rn) = _set_dev_addr();
+        assert!(rn.set_dev_addr_hex("010203ff").is_ok());
         mock.done();
     }
 
     #[test]
-    fn set_devaddr_slice() {
-        let (mut mock, mut rn) = _set_devaddr();
-        assert!(rn.set_devaddr_slice(&[0x01, 0x02, 0x03, 0xff]).is_ok());
+    fn set_dev_addr_slice() {
+        let (mut mock, mut rn) = _set_dev_addr();
+        assert!(rn.set_dev_addr_slice(&[0x01, 0x02, 0x03, 0xff]).is_ok());
         mock.done();
     }
 
-    fn _set_deveui() -> (SerialMock<u8>, Rn2xx3<SerialMock<u8>>) {
+    fn _set_dev_eui() -> (SerialMock<u8>, Rn2xx3<SerialMock<u8>>) {
         let expectations = [
             Transaction::write_many(b"mac set deveui 0004a30b001a55ed\r\n".as_ref()),
             Transaction::read_many(b"ok\r\n"),
@@ -418,16 +431,16 @@ mod tests {
     }
 
     #[test]
-    fn set_deveui_hex() {
-        let (mut mock, mut rn) = _set_deveui();
-        assert!(rn.set_deveui_hex("0004a30b001a55ed").is_ok());
+    fn set_dev_eui_hex() {
+        let (mut mock, mut rn) = _set_dev_eui();
+        assert!(rn.set_dev_eui_hex("0004a30b001a55ed").is_ok());
         mock.done();
     }
 
     #[test]
-    fn set_deveui_slice() {
-        let (mut mock, mut rn) = _set_deveui();
-        assert!(rn.set_deveui_slice(&[0x00, 0x04, 0xa3, 0x0b, 0x00, 0x1a, 0x55, 0xed]).is_ok());
+    fn set_dev_eui_slice() {
+        let (mut mock, mut rn) = _set_dev_eui();
+        assert!(rn.set_dev_eui_slice(&[0x00, 0x04, 0xa3, 0x0b, 0x00, 0x1a, 0x55, 0xed]).is_ok());
         mock.done();
     }
 
