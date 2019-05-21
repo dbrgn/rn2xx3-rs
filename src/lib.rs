@@ -1,3 +1,4 @@
+use core::marker::PhantomData;
 use core::str::{from_utf8, Utf8Error};
 
 use base16;
@@ -9,8 +10,18 @@ const CR: u8 = 0x0d;
 const LF: u8 = 0x0a;
 const OK: [u8; 2] = [b'o', b'k'];
 
-/// The driver instance for both RN2483 and RN2903.
-pub struct Rn2xx3<S> {
+/// Marker trait implemented for all model type parameters.
+pub trait ModelParam {}
+/// Model type parameter for the RN2483.
+pub struct Rn2483;
+/// Model type parameter for the RN2903.
+pub struct Rn2903;
+impl ModelParam for Rn2483 {}
+impl ModelParam for Rn2903 {}
+
+/// The main driver instance.
+pub struct Driver<M: ModelParam, S> {
+    model: PhantomData<M>,
     serial: S,
     read_buf: [u8; 64],
 }
@@ -51,19 +62,38 @@ impl From<Utf8Error> for Error {
     }
 }
 
-/// Basic commands.
-impl<S, E> Rn2xx3<S>
+/// Create a new driver instance for the RN2483 (433/868 MHz), wrapping the
+/// specified serial port.
+pub fn rn2483<S, E>(serial: S) -> Driver<Rn2483, S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
-    /// Create a new driver, wrapping the specified serial port.
-    pub fn new(serial: S) -> Self {
-        Self {
-            serial,
-            read_buf: [0; 64],
-        }
+    Driver {
+        model: PhantomData,
+        serial,
+        read_buf: [0; 64],
     }
+}
 
+/// Create a new driver instance for the RN2903 (915 MHz), wrapping the
+/// specified serial port.
+pub fn rn2903<S, E>(serial: S) -> Driver<Rn2903, S>
+where
+    S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
+{
+    Driver {
+        model: PhantomData,
+        serial,
+        read_buf: [0; 64],
+    }
+}
+
+/// Basic commands.
+impl<M, S, E> Driver<M, S>
+where
+    S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
+    M: ModelParam,
+{
     /// Write a single byte to the serial port.
     fn write_byte(&mut self, byte: u8) -> RnResult<()> {
         block!(self.serial.write(byte)).map_err(|_| Error::SerialWrite)
@@ -137,9 +167,10 @@ where
 }
 
 /// System commands.
-impl<S, E> Rn2xx3<S>
+impl<M, S, E> Driver<M, S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
+    M: ModelParam,
 {
     /// Reset and restart the RN module. Return the version string.
     pub fn reset(&mut self) -> RnResult<&str> {
@@ -262,9 +293,10 @@ macro_rules! hex_setter {
 }
 
 /// MAC Set Commands.
-impl<S, E> Rn2xx3<S>
+impl<M, S, E> Driver<M, S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
+    M: ModelParam,
 {
     hex_setter!(
         "devaddr", 4,
@@ -309,6 +341,16 @@ where
     );
 }
 
+/// MAC Set Commands (RN2483).
+impl<S, E> Driver<Rn2483, S>
+where
+    S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
+{
+    pub fn set_output_power(&mut self, val: &str) -> RnResult<()> {
+        self.send_raw_command_ok(&["mac set pwridx ", val])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,7 +369,7 @@ mod tests {
             Transaction::read_many(CRLF.as_bytes()),
         ];
         let mut mock = SerialMock::new(&expectations);
-        let mut rn = Rn2xx3::new(mock.clone());
+        let mut rn = rn2483(mock.clone());
         assert_eq!(rn.version().unwrap(), VERSION48);
         mock.done();
     }
@@ -340,7 +382,7 @@ mod tests {
             Transaction::read_many(CRLF.as_bytes()),
         ];
         let mut mock = SerialMock::new(&expectations);
-        let mut rn = Rn2xx3::new(mock.clone());
+        let mut rn = rn2483(mock.clone());
         assert_eq!(rn.model().unwrap(), Model::RN2483);
         mock.done();
     }
@@ -353,7 +395,7 @@ mod tests {
             Transaction::read_many(CRLF.as_bytes()),
         ];
         let mut mock = SerialMock::new(&expectations);
-        let mut rn = Rn2xx3::new(mock.clone());
+        let mut rn = rn2483(mock.clone());
         assert_eq!(rn.model().unwrap(), Model::RN2903);
         mock.done();
     }
@@ -365,7 +407,7 @@ mod tests {
             Transaction::read_many(b"ok\r\n"),
         ];
         let mut mock = SerialMock::new(&expectations);
-        let mut rn = Rn2xx3::new(mock.clone());
+        let mut rn = rn2483(mock.clone());
         rn.nvm_set(0x3ab, 42).unwrap();
         mock.done();
     }
@@ -377,7 +419,7 @@ mod tests {
             Transaction::read_many(b"ff\r\n"),
         ];
         let mut mock = SerialMock::new(&expectations);
-        let mut rn = Rn2xx3::new(mock.clone());
+        let mut rn = rn2483(mock.clone());
         assert_eq!(rn.nvm_get(0x300).unwrap(), 0xff);
         mock.done();
     }
@@ -388,7 +430,7 @@ mod tests {
     fn set_dev_addr_bad_length() {
         let expectations = [];
         let mut mock = SerialMock::new(&expectations);
-        let mut rn = Rn2xx3::new(mock.clone());
+        let mut rn = rn2483(mock.clone());
         assert_eq!(rn.set_dev_addr_hex("010203f"), Err(Error::BadParameter));
         assert_eq!(rn.set_dev_addr_hex("010203fff"), Err(Error::BadParameter));
         assert_eq!(rn.set_dev_eui_hex("0004a30b001a55e"), Err(Error::BadParameter));
@@ -396,13 +438,13 @@ mod tests {
         mock.done();
     }
 
-    fn _set_dev_addr() -> (SerialMock<u8>, Rn2xx3<SerialMock<u8>>) {
+    fn _set_dev_addr() -> (SerialMock<u8>, Driver<Rn2483, SerialMock<u8>>) {
         let expectations = [
             Transaction::write_many(b"mac set devaddr 010203ff\r\n"),
             Transaction::read_many(b"ok\r\n"),
         ];
         let mock = SerialMock::new(&expectations);
-        let rn = Rn2xx3::new(mock.clone());
+        let rn = rn2483(mock.clone());
         (mock, rn)
     }
 
@@ -420,13 +462,13 @@ mod tests {
         mock.done();
     }
 
-    fn _set_dev_eui() -> (SerialMock<u8>, Rn2xx3<SerialMock<u8>>) {
+    fn _set_dev_eui() -> (SerialMock<u8>, Driver<Rn2483, SerialMock<u8>>) {
         let expectations = [
             Transaction::write_many(b"mac set deveui 0004a30b001a55ed\r\n".as_ref()),
             Transaction::read_many(b"ok\r\n"),
         ];
         let mock = SerialMock::new(&expectations);
-        let rn = Rn2xx3::new(mock.clone());
+        let rn = rn2483(mock.clone());
         (mock, rn)
     }
 

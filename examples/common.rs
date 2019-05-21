@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use linux_embedded_hal::Serial;
-use rn2xx3::Rn2xx3;
+use rn2xx3::{Driver, Rn2483, rn2483};
 use serial::{self, core::SerialPort};
 
-pub fn init_rn(dev: &str) -> Rn2xx3<Serial> {
+pub fn init_rn(dev: &str) -> Driver<Rn2483, Serial> {
     // Serial port settings
     let settings = serial::PortSettings {
         baud_rate: serial::Baud57600,
@@ -22,7 +22,7 @@ pub fn init_rn(dev: &str) -> Rn2xx3<Serial> {
         .expect("Could not set serial port timeout");
 
     // Initialize driver
-    Rn2xx3::new(Serial(port))
+    rn2483(Serial(port))
 }
 
 #[allow(dead_code)]
