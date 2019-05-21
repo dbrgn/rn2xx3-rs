@@ -12,12 +12,15 @@ const OK: [u8; 2] = [b'o', b'k'];
 
 /// Marker trait implemented for all model type parameters.
 pub trait ModelParam {}
-/// Model type parameter for the RN2483.
-pub struct Rn2483;
-/// Model type parameter for the RN2903.
-pub struct Rn2903;
-impl ModelParam for Rn2483 {}
-impl ModelParam for Rn2903 {}
+/// Model type parameter for the RN2483 (433 MHz).
+pub struct Freq433;
+/// Model type parameter for the RN2483 (868 MHz).
+pub struct Freq868;
+/// Model type parameter for the RN2903 (915 MHz).
+pub struct Freq915;
+impl ModelParam for Freq433 {}
+impl ModelParam for Freq868 {}
+impl ModelParam for Freq915 {}
 
 /// The main driver instance.
 pub struct Driver<M: ModelParam, S> {
@@ -62,9 +65,22 @@ impl From<Utf8Error> for Error {
     }
 }
 
-/// Create a new driver instance for the RN2483 (433/868 MHz), wrapping the
+/// Create a new driver instance for the RN2483 (433 MHz), wrapping the
 /// specified serial port.
-pub fn rn2483<S, E>(serial: S) -> Driver<Rn2483, S>
+pub fn rn2483_433<S, E>(serial: S) -> Driver<Freq433, S>
+where
+    S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
+{
+    Driver {
+        model: PhantomData,
+        serial,
+        read_buf: [0; 64],
+    }
+}
+
+/// Create a new driver instance for the RN2483 (868 MHz), wrapping the
+/// specified serial port.
+pub fn rn2483_868<S, E>(serial: S) -> Driver<Freq868, S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
@@ -77,7 +93,7 @@ where
 
 /// Create a new driver instance for the RN2903 (915 MHz), wrapping the
 /// specified serial port.
-pub fn rn2903<S, E>(serial: S) -> Driver<Rn2903, S>
+pub fn rn2903_915<S, E>(serial: S) -> Driver<Freq915, S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
@@ -341,16 +357,6 @@ where
     );
 }
 
-/// MAC Set Commands (RN2483).
-impl<S, E> Driver<Rn2483, S>
-where
-    S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
-{
-    pub fn set_output_power(&mut self, val: &str) -> RnResult<()> {
-        self.send_raw_command_ok(&["mac set pwridx ", val])
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -369,7 +375,7 @@ mod tests {
             Transaction::read_many(CRLF.as_bytes()),
         ];
         let mut mock = SerialMock::new(&expectations);
-        let mut rn = rn2483(mock.clone());
+        let mut rn = rn2483_868(mock.clone());
         assert_eq!(rn.version().unwrap(), VERSION48);
         mock.done();
     }
@@ -382,7 +388,7 @@ mod tests {
             Transaction::read_many(CRLF.as_bytes()),
         ];
         let mut mock = SerialMock::new(&expectations);
-        let mut rn = rn2483(mock.clone());
+        let mut rn = rn2483_868(mock.clone());
         assert_eq!(rn.model().unwrap(), Model::RN2483);
         mock.done();
     }
@@ -395,7 +401,7 @@ mod tests {
             Transaction::read_many(CRLF.as_bytes()),
         ];
         let mut mock = SerialMock::new(&expectations);
-        let mut rn = rn2483(mock.clone());
+        let mut rn = rn2483_868(mock.clone());
         assert_eq!(rn.model().unwrap(), Model::RN2903);
         mock.done();
     }
@@ -407,7 +413,7 @@ mod tests {
             Transaction::read_many(b"ok\r\n"),
         ];
         let mut mock = SerialMock::new(&expectations);
-        let mut rn = rn2483(mock.clone());
+        let mut rn = rn2483_868(mock.clone());
         rn.nvm_set(0x3ab, 42).unwrap();
         mock.done();
     }
@@ -419,7 +425,7 @@ mod tests {
             Transaction::read_many(b"ff\r\n"),
         ];
         let mut mock = SerialMock::new(&expectations);
-        let mut rn = rn2483(mock.clone());
+        let mut rn = rn2483_868(mock.clone());
         assert_eq!(rn.nvm_get(0x300).unwrap(), 0xff);
         mock.done();
     }
@@ -430,7 +436,7 @@ mod tests {
     fn set_dev_addr_bad_length() {
         let expectations = [];
         let mut mock = SerialMock::new(&expectations);
-        let mut rn = rn2483(mock.clone());
+        let mut rn = rn2483_868(mock.clone());
         assert_eq!(rn.set_dev_addr_hex("010203f"), Err(Error::BadParameter));
         assert_eq!(rn.set_dev_addr_hex("010203fff"), Err(Error::BadParameter));
         assert_eq!(rn.set_dev_eui_hex("0004a30b001a55e"), Err(Error::BadParameter));
@@ -438,13 +444,13 @@ mod tests {
         mock.done();
     }
 
-    fn _set_dev_addr() -> (SerialMock<u8>, Driver<Rn2483, SerialMock<u8>>) {
+    fn _set_dev_addr() -> (SerialMock<u8>, Driver<Freq868, SerialMock<u8>>) {
         let expectations = [
             Transaction::write_many(b"mac set devaddr 010203ff\r\n"),
             Transaction::read_many(b"ok\r\n"),
         ];
         let mock = SerialMock::new(&expectations);
-        let rn = rn2483(mock.clone());
+        let rn = rn2483_868(mock.clone());
         (mock, rn)
     }
 
@@ -462,13 +468,13 @@ mod tests {
         mock.done();
     }
 
-    fn _set_dev_eui() -> (SerialMock<u8>, Driver<Rn2483, SerialMock<u8>>) {
+    fn _set_dev_eui() -> (SerialMock<u8>, Driver<Freq868, SerialMock<u8>>) {
         let expectations = [
             Transaction::write_many(b"mac set deveui 0004a30b001a55ed\r\n".as_ref()),
             Transaction::read_many(b"ok\r\n"),
         ];
         let mock = SerialMock::new(&expectations);
-        let rn = rn2483(mock.clone());
+        let rn = rn2483_868(mock.clone());
         (mock, rn)
     }
 
