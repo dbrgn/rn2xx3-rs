@@ -1,6 +1,7 @@
 use core::str::{from_utf8, Utf8Error};
 
 use base16;
+use doc_comment::doc_comment;
 use embedded_hal::serial;
 use nb::block;
 
@@ -227,47 +228,58 @@ where
     }
 }
 
+macro_rules! hex_setter {
+    ($field:expr, $bytes:expr, $descr:expr, $set_hex:ident, $set_slice:ident, $(,)?) => {
+        doc_comment! {
+            concat!(
+                $descr,
+                "\n\nThe parameter must be a ", stringify!($bytes), "-byte hex string, ",
+                "otherwise `Error::BadParameter` will be returned.",
+            ),
+            pub fn $set_hex(&mut self, val: &str) -> RnResult<()> {
+                if val.len() != $bytes * 2 {
+                    return Err(Error::BadParameter);
+                }
+                self.send_raw_command_ok(&[concat!("mac set ", $field, " "), val])
+            }
+        }
+        doc_comment! {
+            concat!(
+                $descr,
+                "\n\nThe parameter must be a ", stringify!($bytes), "-byte ",
+                "big endian byte slice, otherwise `Error::BadParameter` will be returned.",
+            ),
+            pub fn $set_slice(&mut self, val: &[u8]) -> RnResult<()> {
+                if val.len() != $bytes {
+                    return Err(Error::BadParameter);
+                }
+                let mut buf = [0; $bytes * 2];
+                base16::encode_config_slice(val, base16::EncodeLower, &mut buf);
+                self.$set_hex(from_utf8(&buf)?)
+            }
+        }
+    }
+}
+
 /// MAC Set Commands.
 impl<S, E> Rn2xx3<S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
-    /// Set the unique network device address.
-    ///
-    /// The parameter must be a 4-byte hex string representing the device
-    /// address, from 00000000 to FFFFFFFF.
-    pub fn set_devaddr_hex(&mut self, addr: &str) -> RnResult<()> {
-        if addr.len() != 8 {
-            return Err(Error::BadParameter);
-        }
-        self.send_raw_command_ok(&["mac set devaddr ", addr])
-    }
+    hex_setter!(
+        "devaddr", 4,
+        "Set the unique network device address.",
+        set_devaddr_hex,
+        set_devaddr_slice,
+    );
 
-    /// Set the unique network device address.
-    ///
-    /// The parameter is a 32 bit integer representing the device address.
-    pub fn set_devaddr_u32(&mut self, addr: u32) -> RnResult<()> {
-        let bytes = [
-            ((addr >> 24) & 0xff) as u8,
-            ((addr >> 16) & 0xff) as u8,
-            ((addr >> 8) & 0xff) as u8,
-            ((addr & 0xff) & 0xff) as u8,
-        ];
-        self.set_devaddr_slice(&bytes)
-    }
-
-    /// Set the unique network device address.
-    ///
-    /// The parameter is a 4-byte big endian byte slice representing the device
-    /// address.
-    pub fn set_devaddr_slice(&mut self, addr: &[u8]) -> RnResult<()> {
-        if addr.len() != 4 {
-            return Err(Error::BadParameter);
-        }
-        let mut buf = [0; 8];
-        base16::encode_config_slice(addr, base16::EncodeLower, &mut buf);
-        self.set_devaddr_hex(from_utf8(&buf)?)
-    }
+//    /// Sets the globally unique identifier for the RN2483 module.
+//    pub fn set_deveui(&mut self) -> RnResult<()> {
+//    }
+//
+//    /// Sets the application identifier for the RN2483 module.
+//    pub fn set_appeui(&mut self) -> RnResult<()> {
+//    }
 }
 
 #[cfg(test)]
@@ -357,13 +369,6 @@ mod tests {
     fn set_devaddr_hex() {
         let (mut mock, mut rn) = _set_devaddr();
         assert!(rn.set_devaddr_hex("010203ff").is_ok());
-        mock.done();
-    }
-
-    #[test]
-    fn set_devaddr_u32() {
-        let (mut mock, mut rn) = _set_devaddr();
-        assert!(rn.set_devaddr_u32(16777216 + 131072 + 768 + 255).is_ok());
         mock.done();
     }
 
