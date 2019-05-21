@@ -10,21 +10,21 @@ const CR: u8 = 0x0d;
 const LF: u8 = 0x0a;
 const OK: [u8; 2] = [b'o', b'k'];
 
-/// Marker trait implemented for all model type parameters.
-pub trait ModelParam {}
-/// Model type parameter for the RN2483 (433 MHz).
+/// Marker trait implemented for all models / frequencies.
+pub trait Frequency {}
+/// Frequency type parameter for the RN2483 (433 MHz).
 pub struct Freq433;
-/// Model type parameter for the RN2483 (868 MHz).
+/// Frequency type parameter for the RN2483 (868 MHz).
 pub struct Freq868;
-/// Model type parameter for the RN2903 (915 MHz).
+/// Frequency type parameter for the RN2903 (915 MHz).
 pub struct Freq915;
-impl ModelParam for Freq433 {}
-impl ModelParam for Freq868 {}
-impl ModelParam for Freq915 {}
+impl Frequency for Freq433 {}
+impl Frequency for Freq868 {}
+impl Frequency for Freq915 {}
 
 /// The main driver instance.
-pub struct Driver<M: ModelParam, S> {
-    model: PhantomData<M>,
+pub struct Driver<F: Frequency, S> {
+    frequency: PhantomData<F>,
     serial: S,
     read_buf: [u8; 64],
 }
@@ -72,7 +72,7 @@ where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
     Driver {
-        model: PhantomData,
+        frequency: PhantomData,
         serial,
         read_buf: [0; 64],
     }
@@ -85,7 +85,7 @@ where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
     Driver {
-        model: PhantomData,
+        frequency: PhantomData,
         serial,
         read_buf: [0; 64],
     }
@@ -98,17 +98,17 @@ where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
     Driver {
-        model: PhantomData,
+        frequency: PhantomData,
         serial,
         read_buf: [0; 64],
     }
 }
 
 /// Basic commands.
-impl<M, S, E> Driver<M, S>
+impl<F, S, E> Driver<F, S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
-    M: ModelParam,
+    F: Frequency,
 {
     /// Write a single byte to the serial port.
     fn write_byte(&mut self, byte: u8) -> RnResult<()> {
@@ -183,10 +183,10 @@ where
 }
 
 /// System commands.
-impl<M, S, E> Driver<M, S>
+impl<F, S, E> Driver<F, S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
-    M: ModelParam,
+    F: Frequency,
 {
     /// Reset and restart the RN module. Return the version string.
     pub fn reset(&mut self) -> RnResult<&str> {
@@ -309,10 +309,10 @@ macro_rules! hex_setter {
 }
 
 /// MAC Set Commands.
-impl<M, S, E> Driver<M, S>
+impl<F, S, E> Driver<F, S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
-    M: ModelParam,
+    F: Frequency,
 {
     hex_setter!(
         "devaddr", 4,
