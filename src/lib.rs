@@ -336,12 +336,26 @@ macro_rules! hex_setter_getter {
     }
 }
 
-/// MAC Set / Get Commands.
+/// MAC commands.
 impl<F, S, E> Driver<F, S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
     F: Frequency,
 {
+    /// Save MAC configuration parameters.
+    ///
+    /// This command will save LoRaWAN Class A protocol configuration
+    /// parameters to the user EEPROM. When the next [`sys
+    /// reset`](#method.reset) command is issued, the LoRaWAN Class A protocol
+    /// configuration will be initialized with the last saved parameters.
+    ///
+    /// The LoRaWAN Class A protocol configuration savable parameters are:
+    /// `band`, `deveui`, `appeui`, `appkey`, `nwkskey`, `appskey`, `devaddr`,
+    /// `ch freq`, `ch dcycle`, `ch drrange`, `ch status`.
+    pub fn save_config(&mut self) -> RnResult<()> {
+        self.send_raw_command_ok(&["mac save"])
+    }
+
     hex_setter_getter!(
         "devaddr", 4,
         "the unique network device address",
