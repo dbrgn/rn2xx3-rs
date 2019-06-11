@@ -275,11 +275,19 @@ where
     }
 }
 
-macro_rules! hex_setter {
-    ($field:expr, $bytes:expr, $descr:expr, $set_hex:ident, $set_slice:ident, $(,)?) => {
+macro_rules! hex_setter_getter {
+    (
+        $field:expr, $bytes:expr,
+        $descr:expr,
+        $set_hex:ident, $set_slice:ident,
+        $get_hex:ident, $get_slice:ident,
+        $(,)?
+    ) => {
         doc_comment! {
             concat!(
+                "Set ",
                 $descr,
+                ".",
                 "\n\nThe parameter must be a ", stringify!($bytes), "-byte hex string, ",
                 "otherwise `Error::BadParameter` will be returned.",
             ),
@@ -290,9 +298,12 @@ macro_rules! hex_setter {
                 self.send_raw_command_ok(&[concat!("mac set ", $field, " "), val])
             }
         }
+
         doc_comment! {
             concat!(
+                "Set ",
                 $descr,
+                ".",
                 "\n\nThe parameter must be a ", stringify!($bytes), "-byte ",
                 "big endian byte slice, otherwise `Error::BadParameter` will be returned.",
             ),
@@ -305,55 +316,84 @@ macro_rules! hex_setter {
                 self.$set_hex(from_utf8(&buf)?)
             }
         }
+
+        doc_comment! {
+            concat!("Get ", $descr, " as hex str."),
+            pub fn $get_hex(&mut self) -> RnResult<&str> {
+                self.send_raw_command_str(&[concat!("mac get ", $field)])
+            }
+        }
+
+        doc_comment! {
+            concat!("Get ", $descr, " bytes."),
+            pub fn $get_slice(&mut self) -> RnResult<[u8; $bytes]> {
+                let hex = self.$get_hex()?;
+                let mut buf = [0; $bytes];
+                base16::decode_slice(hex, &mut buf).map_err(|_| Error::ParsingError)?;
+                Ok(buf)
+            }
+        }
     }
 }
 
-/// MAC Set Commands.
+/// MAC Set / Get Commands.
 impl<F, S, E> Driver<F, S>
 where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
     F: Frequency,
 {
-    hex_setter!(
+    hex_setter_getter!(
         "devaddr", 4,
-        "Set the unique network device address.",
+        "the unique network device address",
         set_dev_addr_hex,
         set_dev_addr_slice,
+        get_dev_addr_hex,
+        get_dev_addr_slice,
     );
 
-    hex_setter!(
+    hex_setter_getter!(
         "deveui", 8,
-        "Set the globally unique device identifier.",
+        "the globally unique device identifier",
         set_dev_eui_hex,
         set_dev_eui_slice,
+        get_dev_eui_hex,
+        get_dev_eui_slice,
     );
 
-    hex_setter!(
+    hex_setter_getter!(
         "appeui", 8,
-        "Set the globally unique application identifier.",
+        "the globally unique application identifier",
         set_app_eui_hex,
         set_app_eui_slice,
+        get_app_eui_hex,
+        get_app_eui_slice,
     );
 
-    hex_setter!(
+    hex_setter_getter!(
         "nwkskey", 16,
-        "Set the network session key.",
+        "the network session key",
         set_network_session_key_hex,
         set_network_session_key_slice,
+        get_network_session_key_hex,
+        get_network_session_key_slice,
     );
 
-    hex_setter!(
+    hex_setter_getter!(
         "appskey", 16,
-        "Set the application session key.",
+        "the application session key",
         set_app_session_key_hex,
         set_app_session_key_slice,
+        get_app_session_key_hex,
+        get_app_session_key_slice,
     );
 
-    hex_setter!(
+    hex_setter_getter!(
         "appkey", 16,
-        "Set the application key.",
+        "the application key",
         set_app_key_hex,
         set_app_key_slice,
+        get_app_key_hex,
+        get_app_key_slice,
     );
 }
 
