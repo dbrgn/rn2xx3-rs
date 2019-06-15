@@ -116,6 +116,9 @@ dependencies = [
  "cast 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "embedded-hal 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "i2cdev 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nb 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serial-core 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serial-unix 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "spidev 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sysfs_gpio 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

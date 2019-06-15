@@ -39,7 +39,7 @@ pub enum Error {
     /// Read buffer is too small.
     /// This is a bug, please report it on GitHub!
     ReadBufferTooSmall,
-    /// Command contained invalid UTF-8.
+    /// Command or response contained invalid UTF-8.
     EncodingError,
     /// A response could not be parsed.
     ParsingError,
@@ -47,6 +47,65 @@ pub enum Error {
     CommandFailed,
     /// A bad parameter was supplied.
     BadParameter,
+}
+
+impl From<Utf8Error> for Error {
+    fn from(_: Utf8Error) -> Self {
+        Error::EncodingError
+    }
+}
+
+/// Errors that can occur during the join procedure.
+#[derive(Debug, PartialEq, Eq)]
+pub enum JoinError {
+    /// Invalid join mode. This indicates a bug in the driver and should be
+    /// reported on GitHub.
+    InvalidParam,
+    /// The keys corresponding to the join mode (OTAA or ABP) were not
+    /// configured.
+    KeysNotInit,
+    /// All channels are busy.
+    NoFreeChannel,
+    /// Device is in a Silent Immediately state.
+    Silent,
+    /// MAC state is not idle.
+    Busy,
+    /// MAC was paused and not resumed.
+    MacPaused,
+    /// Join procedure was unsuccessful: Device tried to join but was rejected
+    /// or did not receive a response.
+    JoinUnsuccessful,
+    /// Unknown response.
+    UnknownResponse,
+    /// Another error occurred.
+    Other(Error),
+}
+
+impl From<Error> for JoinError {
+    fn from(other: Error) -> Self {
+        JoinError::Other(other)
+    }
+}
+
+impl From<&str> for JoinError {
+    fn from(other: &str) -> Self {
+        match other {
+            "invalid_param" => JoinError::InvalidParam,
+            "keys_not_init" => JoinError::KeysNotInit,
+            "no_free_ch" => JoinError::NoFreeChannel,
+            "silent" => JoinError::Silent,
+            "busy" => JoinError::Busy,
+            "mac_paused" => JoinError::MacPaused,
+            "denied" => JoinError::JoinUnsuccessful,
+            _ => JoinError::UnknownResponse,
+        }
+    }
+}
+
+impl From<Utf8Error> for JoinError {
+    fn from(_: Utf8Error) -> Self {
+        JoinError::Other(Error::EncodingError)
+    }
 }
 
 /// A `Result<T, Error>`.
@@ -59,10 +118,13 @@ pub enum Model {
     RN2903,
 }
 
-impl From<Utf8Error> for Error {
-    fn from(_: Utf8Error) -> Self {
-        Error::EncodingError
-    }
+/// The join procedure.
+#[derive(Debug, PartialEq, Eq)]
+pub enum JoinMode {
+    /// Over the air activation
+    Otaa,
+    /// Activation by personalization
+    Abp,
 }
 
 /// Create a new driver instance for the RN2483 (433 MHz), wrapping the
@@ -409,6 +471,34 @@ where
         get_app_key_hex,
         get_app_key_slice,
     );
+
+    /// Join the network.
+    pub fn join(&mut self, mode: JoinMode) -> Result<(), JoinError> {
+        let mode_str = match mode {
+            JoinMode::Otaa => "otaa",
+            JoinMode::Abp => "abp",
+        };
+
+        // First response is whether the join procedure was initialized properly.
+        match self.send_raw_command_str(&["mac join ", mode_str])? {
+            "ok" => {},
+            "invalid_param" => return Err(JoinError::InvalidParam),
+            "keys_not_init" => return Err(JoinError::KeysNotInit),
+            "no_free_ch" => return Err(JoinError::NoFreeChannel),
+            "silent" => return Err(JoinError::Silent),
+            "busy" => return Err(JoinError::Busy),
+            "mac_paused" => return Err(JoinError::MacPaused),
+            "denied" => return Err(JoinError::JoinUnsuccessful),
+            _ => return Err(JoinError::UnknownResponse),
+        };
+
+        // Second response indicates whether the join procedure succeeded.
+        match self.read_line()? {
+            b"denied" => Err(JoinError::JoinUnsuccessful),
+            b"accepted" => Ok(()),
+            _ => Err(JoinError::UnknownResponse),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -546,4 +636,79 @@ mod tests {
         mock.done();
     }
 
+    mod join {
+        use super::*;
+
+        #[test]
+        fn otaa_ok() {
+            let expectations = [
+                Transaction::write_many(b"mac join otaa\r\n"),
+                Transaction::read_many(b"ok\r\naccepted\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert_eq!(rn.join(JoinMode::Otaa), Ok(()));
+            mock.done();
+        }
+
+        #[test]
+        fn abp_ok() {
+            let expectations = [
+                Transaction::write_many(b"mac join abp\r\n"),
+                Transaction::read_many(b"ok\r\naccepted\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert_eq!(rn.join(JoinMode::Abp), Ok(()));
+            mock.done();
+        }
+
+        #[test]
+        fn otaa_denied() {
+            let expectations = [
+                Transaction::write_many(b"mac join otaa\r\n"),
+                Transaction::read_many(b"ok\r\ndenied\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert_eq!(rn.join(JoinMode::Otaa), Err(JoinError::JoinUnsuccessful));
+            mock.done();
+        }
+
+        #[test]
+        fn otaa_unknown_response_1() {
+            let expectations = [
+                Transaction::write_many(b"mac join otaa\r\n"),
+                Transaction::read_many(b"xyz\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert_eq!(rn.join(JoinMode::Otaa), Err(JoinError::UnknownResponse));
+            mock.done();
+        }
+
+        #[test]
+        fn otaa_unknown_response_2() {
+            let expectations = [
+                Transaction::write_many(b"mac join otaa\r\n"),
+                Transaction::read_many(b"ok\r\nxyz\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert_eq!(rn.join(JoinMode::Otaa), Err(JoinError::UnknownResponse));
+            mock.done();
+        }
+
+        #[test]
+        fn otaa_no_free_ch() {
+            let expectations = [
+                Transaction::write_many(b"mac join otaa\r\n"),
+                Transaction::read_many(b"no_free_ch\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert_eq!(rn.join(JoinMode::Otaa), Err(JoinError::NoFreeChannel));
+            mock.done();
+        }
+    }
 }
