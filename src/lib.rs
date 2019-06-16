@@ -1,10 +1,15 @@
+mod errors;
+mod utils;
+
 use core::marker::PhantomData;
-use core::str::{from_utf8, Utf8Error};
+use core::str::{from_utf8, FromStr};
 
 use base16;
 use doc_comment::doc_comment;
 use embedded_hal::serial;
 use nb::block;
+
+use crate::errors::{Error, JoinError, TxError, RnResult};
 
 const CR: u8 = 0x0d;
 const LF: u8 = 0x0a;
@@ -29,88 +34,6 @@ pub struct Driver<F: Frequency, S> {
     read_buf: [u8; 64],
 }
 
-/// A collection of all errors that can occur.
-#[derive(Debug, PartialEq, Eq)]
-pub enum Error {
-    /// Could not read from serial port.
-    SerialRead,
-    /// Could not write to serial port.
-    SerialWrite,
-    /// Read buffer is too small.
-    /// This is a bug, please report it on GitHub!
-    ReadBufferTooSmall,
-    /// Command or response contained invalid UTF-8.
-    EncodingError,
-    /// A response could not be parsed.
-    ParsingError,
-    /// A command failed.
-    CommandFailed,
-    /// A bad parameter was supplied.
-    BadParameter,
-}
-
-impl From<Utf8Error> for Error {
-    fn from(_: Utf8Error) -> Self {
-        Error::EncodingError
-    }
-}
-
-/// Errors that can occur during the join procedure.
-#[derive(Debug, PartialEq, Eq)]
-pub enum JoinError {
-    /// Invalid join mode. This indicates a bug in the driver and should be
-    /// reported on GitHub.
-    InvalidParam,
-    /// The keys corresponding to the join mode (OTAA or ABP) were not
-    /// configured.
-    KeysNotInit,
-    /// All channels are busy.
-    NoFreeChannel,
-    /// Device is in a Silent Immediately state.
-    Silent,
-    /// MAC state is not idle.
-    Busy,
-    /// MAC was paused and not resumed.
-    MacPaused,
-    /// Join procedure was unsuccessful: Device tried to join but was rejected
-    /// or did not receive a response.
-    JoinUnsuccessful,
-    /// Unknown response.
-    UnknownResponse,
-    /// Another error occurred.
-    Other(Error),
-}
-
-impl From<Error> for JoinError {
-    fn from(other: Error) -> Self {
-        JoinError::Other(other)
-    }
-}
-
-impl From<&str> for JoinError {
-    fn from(other: &str) -> Self {
-        match other {
-            "invalid_param" => JoinError::InvalidParam,
-            "keys_not_init" => JoinError::KeysNotInit,
-            "no_free_ch" => JoinError::NoFreeChannel,
-            "silent" => JoinError::Silent,
-            "busy" => JoinError::Busy,
-            "mac_paused" => JoinError::MacPaused,
-            "denied" => JoinError::JoinUnsuccessful,
-            _ => JoinError::UnknownResponse,
-        }
-    }
-}
-
-impl From<Utf8Error> for JoinError {
-    fn from(_: Utf8Error) -> Self {
-        JoinError::Other(Error::EncodingError)
-    }
-}
-
-/// A `Result<T, Error>`.
-pub type RnResult<T> = Result<T, Error>;
-
 /// List of all supported RN module models.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Model {
@@ -125,6 +48,21 @@ pub enum JoinMode {
     Otaa,
     /// Activation by personalization
     Abp,
+}
+
+/// Whether to send an uplink as confirmed or unconfirmed message.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ConfirmationMode {
+    /// Expect a confirmation from the gateway.
+    Confirmed,
+    /// No confirmation is expected.
+    Unconfirmed,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Downlink<'a> {
+    port: u8,
+    hexdata: &'a str,
 }
 
 /// Create a new driver instance for the RN2483 (433 MHz), wrapping the
@@ -482,7 +420,7 @@ where
         // First response is whether the join procedure was initialized properly.
         match self.send_raw_command_str(&["mac join ", mode_str])? {
             "ok" => {},
-            "invalid_param" => return Err(JoinError::InvalidParam),
+            "invalid_param" => return Err(JoinError::BadParameter),
             "keys_not_init" => return Err(JoinError::KeysNotInit),
             "no_free_ch" => return Err(JoinError::NoFreeChannel),
             "silent" => return Err(JoinError::Silent),
@@ -497,6 +435,68 @@ where
             b"denied" => Err(JoinError::JoinUnsuccessful),
             b"accepted" => Ok(()),
             _ => Err(JoinError::UnknownResponse),
+        }
+    }
+
+    /// Send a hex uplink on the specified port.
+    ///
+    /// If a downlink is received, it is returned.
+    pub fn transmit_hex(
+        &mut self,
+        mode: ConfirmationMode,
+        port: u8,
+        data: &str,
+    ) -> Result<Option<Downlink>, TxError> {
+        // Validate and parse arguments
+        if data.len() % 2 != 0 {
+            return Err(TxError::BadParameter);
+        }
+        utils::validate_port(port, TxError::BadParameter)?;
+        let mode_str = match mode {
+            ConfirmationMode::Confirmed => "cnf",
+            ConfirmationMode::Unconfirmed => "uncnf",
+        };
+        let mut buf = [0; 3];
+        let port_str = utils::u8_to_str(port, &mut buf)?;
+
+        // First response is whether the uplink transmission could be initialized.
+        match self.send_raw_command(&["mac tx ", mode_str, " ", port_str, " ", data])? {
+            b"ok" => {},
+            b"invalid_param" => return Err(TxError::BadParameter),
+            b"not_joined" => return Err(TxError::NotJoined),
+            b"no_free_ch" => return Err(TxError::NoFreeChannel),
+            b"silent" => return Err(TxError::Silent),
+            b"frame_counter_err_rejoin_needed" => return Err(TxError::FrameCounterRollover),
+            b"busy" => return Err(TxError::Busy),
+            b"mac_paused" => return Err(TxError::MacPaused),
+            b"invalid_data_len" => return Err(TxError::InvalidDataLenth),
+            _ => return Err(TxError::UnknownResponse),
+        };
+
+        // The second response could contain an error or a downlink.
+        match self.read_line()? {
+            b"mac_tx_ok" => Ok(None),
+            b"mac_err" => Err(TxError::TxUnsuccessful),
+            b"invalid_data_len" => return Err(TxError::InvalidDataLenth),
+            val if val.starts_with(b"mac_rx ") => {
+                let mut parts = from_utf8(val)?.split_ascii_whitespace();
+
+                // Get port
+                let _ = parts.next().ok_or(TxError::Other(Error::ParsingError))?;
+                let port_str = parts.next().ok_or(TxError::Other(Error::ParsingError))?;
+                let port = u8::from_str(&port_str)
+                    .map_err(|_| TxError::Other(Error::ParsingError))?;
+                utils::validate_port(port, TxError::Other(Error::ParsingError))?;
+
+                // Get data
+                let hexdata = parts.next().ok_or(TxError::Other(Error::ParsingError))?;
+                if hexdata.len() % 2 != 0 {
+                    return Err(TxError::Other(Error::ParsingError));
+                }
+
+                Ok(Some(Downlink { port, hexdata }))
+            },
+            _ => Err(TxError::UnknownResponse),
         }
     }
 }
