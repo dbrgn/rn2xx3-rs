@@ -499,6 +499,20 @@ where
             _ => Err(TxError::UnknownResponse),
         }
     }
+
+    /// Send an uplink on the specified port.
+    ///
+    /// If a downlink is received, it is returned.
+    pub fn transmit_slice(
+        &mut self,
+        mode: ConfirmationMode,
+        port: u8,
+        data: &[u8],
+    ) -> Result<Option<Downlink>, TxError> {
+        let mut buf = [0; 256];
+        let bytes = base16::encode_config_slice(data, base16::EncodeLower, &mut buf);
+        self.transmit_hex(mode, port, from_utf8(&buf[0..bytes])?)
+    }
 }
 
 #[cfg(test)]
@@ -708,6 +722,67 @@ mod tests {
             let mut mock = SerialMock::new(&expectations);
             let mut rn = rn2483_868(mock.clone());
             assert_eq!(rn.join(JoinMode::Otaa), Err(JoinError::NoFreeChannel));
+            mock.done();
+        }
+    }
+
+    mod transmit {
+        use super::*;
+
+        #[test]
+        fn transmit_hex_uncnf_no_downlink() {
+            let expectations = [
+                Transaction::write_many(b"mac tx uncnf 42 23ff\r\n"),
+                Transaction::read_many(b"ok\r\nmac_tx_ok\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert_eq!(rn.transmit_hex(ConfirmationMode::Unconfirmed, 42, "23ff"), Ok(None));
+            mock.done();
+        }
+
+        #[test]
+        fn transmit_hex_cnf_no_downlink() {
+            let expectations = [
+                Transaction::write_many(b"mac tx cnf 42 23ff\r\n"),
+                Transaction::read_many(b"ok\r\nmac_tx_ok\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert_eq!(rn.transmit_hex(ConfirmationMode::Confirmed, 42, "23ff"), Ok(None));
+            mock.done();
+        }
+
+        #[test]
+        fn transmit_hex_uncnf_downlink() {
+            let expectations = [
+                Transaction::write_many(b"mac tx uncnf 42 23ff\r\n"),
+                Transaction::read_many(b"ok\r\nmac_rx 101 000102feff\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert_eq!(
+                rn.transmit_hex(ConfirmationMode::Unconfirmed, 42, "23ff"),
+                Ok(Some(Downlink {
+                    port: 101,
+                    hexdata: "000102feff",
+                }))
+            );
+            mock.done();
+        }
+
+        #[test]
+        fn transmit_slice_uncnf_no_downlink() {
+            let expectations = [
+                Transaction::write_many(b"mac tx uncnf 42 23ff\r\n"),
+                Transaction::read_many(b"ok\r\nmac_tx_ok\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert_eq!(
+                rn.transmit_slice(ConfirmationMode::Unconfirmed, 42, &[0x23, 0xff]),
+                Ok(None),
+            );
             mock.done();
         }
     }
