@@ -1,6 +1,7 @@
 # rn2xx3: Rust Driver for RN2483 / RN2903 LoRaWAN modules
 
-WIP
+Status: The library can join and transmit uplinks, but not all commands are
+handled yet.
 
 
 ## Datasheets
