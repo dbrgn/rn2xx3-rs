@@ -65,7 +65,8 @@ dependencies = [
 
 [[package]]
 name = "embedded-hal-mock"
-version = "0.6.0"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "embedded-hal 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "nb 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -112,6 +113,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "linux-embedded-hal"
 version = "0.2.2"
+source = "git+https://github.com/rust-embedded/linux-embedded-hal#235d9db5e26fb1399151288b23efbbe3b8713efc"
 dependencies = [
  "cast 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "embedded-hal 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -173,8 +175,8 @@ dependencies = [
  "base16 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "doc-comment 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "embedded-hal 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "embedded-hal-mock 0.6.0",
- "linux-embedded-hal 0.2.2",
+ "embedded-hal-mock 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "linux-embedded-hal 0.2.2 (git+https://github.com/rust-embedded/linux-embedded-hal)",
  "nb 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serial 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -278,11 +280,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum cfg-if 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)" = "b486ce3ccf7ffd79fdeb678eac06a9e6c09fc88d33836340becb8fffe87c5e33"
 "checksum doc-comment 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "923dea538cea0aa3025e8685b20d6ee21ef99c4f77e954a30febbaac5ec73a97"
 "checksum embedded-hal 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "ee4908a155094da7723c2d60d617b820061e3b4efcc3d9e293d206a5a76c170b"
+"checksum embedded-hal-mock 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "572f0e0ed1378a01f4079abab8fc951f81bc82f52bb65f6a4bfc6723f8a9b284"
 "checksum gcc 0.3.55 (registry+https://github.com/rust-lang/crates.io-index)" = "8f5f3913fa0bfe7ee1fd8248b6b9f42a5af4b9d65ec2dd2c3c26132b950ecfc2"
 "checksum i2cdev 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3dabb8dd1c6c973b20fa6342069a2703a11f062768d613cc57a5db29a3fe325c"
 "checksum ioctl-rs 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "f7970510895cee30b3e9128319f2cefd4bde883a39f38baa279567ba3a7eb97d"
 "checksum iovec 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "dbe6e417e7d0975db6512b90796e8ce223145ac4e33c377e4a42882a0e88bb08"
 "checksum libc 0.2.55 (registry+https://github.com/rust-lang/crates.io-index)" = "42914d39aad277d9e176efbdad68acb1d5443ab65afe0e0e4f0d49352a950880"
+"checksum linux-embedded-hal 0.2.2 (git+https://github.com/rust-embedded/linux-embedded-hal)" = "<none>"
 "checksum nb 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "b1411551beb3c11dedfb0a90a0fa256b47d28b9ec2cdff34c25a2fa59e45dbdc"
 "checksum nix 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b7fd5681d13fda646462cfbd4e5f2051279a89a544d50eb98c365b507246839f"
 "checksum nix 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d37e713a259ff641624b6cb20e3b12b2952313ba36b6823c0f16e6cfd9e5de17"

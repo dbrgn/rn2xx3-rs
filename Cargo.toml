@@ -17,6 +17,6 @@ embedded-hal = "0.2"
 nb = "0.1"
 
 [dev-dependencies]
-embedded-hal-mock = { path = "../embedded-hal-mock" }
-linux-embedded-hal = { path = "../linux-embedded-hal" }
+embedded-hal-mock = "0.7"
+linux-embedded-hal = { git = "https://github.com/rust-embedded/linux-embedded-hal" }
 serial = "0.4"
