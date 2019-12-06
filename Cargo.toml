@@ -11,7 +11,7 @@ categories = ["embedded", "hardware-support"]  # todo: no-std?
 edition = "2018"
 
 [dependencies]
-base16 = { version = "0.1", features = [] }
+base16 = { version = "0.2", features = [] }
 doc-comment = "0.3"
 embedded-hal = "0.2"
 nb = "0.1"

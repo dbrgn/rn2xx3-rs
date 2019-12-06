@@ -249,8 +249,7 @@ where
             return Err(Error::BadParameter);
         }
         let hex_addr = format!("{:x}", addr);
-        let (h, l) = base16::encode_byte_l(byte);
-        let hex_byte_bytes = [h, l];
+        let hex_byte_bytes = base16::encode_byte_l(byte);
         let hex_byte = from_utf8(&hex_byte_bytes).unwrap();
         let args = ["sys set nvm ", &hex_addr, " ", &hex_byte];
         self.send_raw_command_ok(&args)
