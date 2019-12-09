@@ -1,3 +1,128 @@
+//! # RN2xx3
+//!
+//! Driver for Microchip RN2483 / RN2903 LoRaWAN modules.
+//!
+//! ## Usage
+//!
+//! First, configure a serial port using a crate that implements the serial
+//! traits from `embedded_hal`, for example
+//! [serial](https://crates.io/crates/serial).
+//!
+//! ```no_run
+//! use std::time::Duration;
+//! use linux_embedded_hal::Serial;
+//! use serial::{self, core::SerialPort};
+//!
+//! // Serial port settings
+//! let settings = serial::PortSettings {
+//!     baud_rate: serial::Baud57600,
+//!     char_size: serial::Bits8,
+//!     parity: serial::ParityNone,
+//!     stop_bits: serial::Stop1,
+//!     flow_control: serial::FlowNone,
+//! };
+//!
+//! // Open serial port
+//! let mut port = serial::open("/dev/ttyACM0").expect("Could not open serial port");
+//! port.configure(&settings)
+//!     .expect("Could not configure serial port");
+//! port.set_timeout(Duration::from_secs(1))
+//!     .expect("Could not set serial port timeout");
+//! let serialport = Serial(port);
+//! ```
+//!
+//! Then initialize the driver, either for the RN2483 or for the RN2903, on
+//! your desired frequency:
+//!
+//! ```no_run
+//! # use std::time::Duration;
+//! # use linux_embedded_hal::Serial;
+//! # use serial::{self, core::SerialPort};
+//! # // Serial port settings
+//! # let settings = serial::PortSettings {
+//! #     baud_rate: serial::Baud57600,
+//! #     char_size: serial::Bits8,
+//! #     parity: serial::ParityNone,
+//! #     stop_bits: serial::Stop1,
+//! #     flow_control: serial::FlowNone,
+//! # };
+//! use rn2xx3;
+//!
+//! # let mut port = serial::open("/dev/ttyACM0").expect("Could not open serial port");
+//! # port.configure(&settings).expect("Could not configure serial port");
+//! # port.set_timeout(Duration::from_secs(1)).expect("Could not set serial port timeout");
+//! # let serialport = Serial(port);
+//! // RN2483 at 868 MHz
+//! let rn = rn2xx3::rn2483_868(serialport);
+//!
+//! # let mut port = serial::open("/dev/ttyACM0").expect("Could not open serial port");
+//! # port.configure(&settings).expect("Could not configure serial port");
+//! # port.set_timeout(Duration::from_secs(1)).expect("Could not set serial port timeout");
+//! # let serialport = Serial(port);
+//! // RN2483 at 433 MHz
+//! let rn = rn2xx3::rn2483_433(serialport);
+//!
+//! # let mut port = serial::open("/dev/ttyACM0").expect("Could not open serial port");
+//! # port.configure(&settings).expect("Could not configure serial port");
+//! # port.set_timeout(Duration::from_secs(1)).expect("Could not set serial port timeout");
+//! # let serialport = Serial(port);
+//! // RN2903 at 915 MHz
+//! let rn = rn2xx3::rn2903_915(serialport);
+//! ```
+//!
+//! Now you can read information from the module and join, e.g. via OTAA:
+//!
+//! ```no_run
+//! # use std::time::Duration;
+//! # use linux_embedded_hal::Serial;
+//! # use serial::{self, core::SerialPort};
+//! # // Serial port settings
+//! # let settings = serial::PortSettings {
+//! #     baud_rate: serial::Baud57600,
+//! #     char_size: serial::Bits8,
+//! #     parity: serial::ParityNone,
+//! #     stop_bits: serial::Stop1,
+//! #     flow_control: serial::FlowNone,
+//! # };
+//! # use rn2xx3;
+//! # let mut port = serial::open("/dev/ttyACM0").expect("Could not open serial port");
+//! # port.configure(&settings).expect("Could not configure serial port");
+//! # port.set_timeout(Duration::from_secs(1)).expect("Could not set serial port timeout");
+//! # let serialport = Serial(port);
+//! # let mut rn = rn2xx3::rn2483_868(serialport);
+//! use rn2xx3::{ConfirmationMode, JoinMode};
+//!
+//! // Reset module
+//! println!("Resetting module...\n");
+//! rn.reset().expect("Could not reset");
+//!
+//! // Show device info
+//! println!("== Device info ==\n");
+//! let hweui = rn.hweui().expect("Could not read hweui");
+//! println!("     HW-EUI: {}", hweui);
+//! let model = rn.model().expect("Could not read model");
+//! println!("      Model: {:?}", model);
+//! let version = rn.version().expect("Could not read version");
+//! println!("    Version: {}", version);
+//! let vdd = rn.vdd().expect("Could not read vdd");
+//! println!("Vdd voltage: {} mV", vdd);
+//!
+//! // Set keys
+//! println!("Setting keys...");
+//! rn.set_app_eui_hex("0011223344556677").expect("Could not set app EUI");
+//! rn.set_app_key_hex("0011223344556677889900aabbccddee").expect("Could not set app key");
+//!
+//! // Join
+//! println!("Joining via OTAA...");
+//! rn.join(JoinMode::Otaa).expect("Could not join");
+//! println!("OK");
+//!
+//! // Send data
+//! let fport = 1u8;
+//! rn.transmit_slice(ConfirmationMode::Unconfirmed, fport, &[23, 42]).expect("Could not transmit data");
+//! ```
+//!
+//! For more examples, refer to the `examples` directory in the source repository.
 mod errors;
 mod utils;
 
