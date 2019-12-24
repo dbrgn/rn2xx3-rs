@@ -24,6 +24,36 @@ pub(crate) fn u8_to_str(val: u8, buf: &mut [u8]) -> RnResult<&str> {
     Ok(from_utf8(&buf[0..chars])?)
 }
 
+/// Trim leading zeroes from a hex string.
+///
+/// Examples:
+///
+/// - "1234" -> "1234"
+/// - "0123" -> "123"
+///
+/// All-zero values will be returned as a single zero:
+///
+/// - "000" -> "0"
+///
+/// Empty values will remain empty:
+///
+/// - "" -> ""
+///
+/// Non-hex characters will be ignored:
+///
+/// - "zzz" -> "zzz"
+pub(crate) fn ltrim_hex(val: &str) -> &str {
+    if val.is_empty() {
+        return val;
+    }
+    let trimmed = val.trim_start_matches('0');
+    if trimmed.is_empty() {
+        "0"
+    } else {
+        trimmed
+    }
+}
+
 pub(crate) fn validate_port<T>(port: u8, err: T) -> Result<(), T> {
     if port >= 1 && port <= 223 {
         Ok(())
@@ -34,6 +64,8 @@ pub(crate) fn validate_port<T>(port: u8, err: T) -> Result<(), T> {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
+
     use super::*;
 
     mod u8_to_str {
@@ -44,7 +76,7 @@ mod tests {
             let mut buf = [0; 3];
             for i in 0..=255 {
                 let string = u8_to_str(i, &mut buf).unwrap();
-                assert_eq!(string, &format!("{}", i));
+                assert_eq!(string, &std::format!("{}", i));
             }
         }
 
@@ -62,6 +94,40 @@ mod tests {
 
             assert!(u8_to_str(255, &mut buf3).is_ok());
             assert_eq!(u8_to_str(255, &mut buf2), Err(Error::BadParameter));
+        }
+    }
+
+    mod ltrim_hex {
+        use super::*;
+
+        #[test]
+        fn no_prefix() {
+            assert_eq!(ltrim_hex("1234"), "1234");
+        }
+
+        #[test]
+        fn single_prefix() {
+            assert_eq!(ltrim_hex("0123"), "123");
+        }
+
+        #[test]
+        fn multi_prefix() {
+            assert_eq!(ltrim_hex("0001"), "1");
+        }
+
+        #[test]
+        fn zero() {
+            assert_eq!(ltrim_hex("0000"), "0");
+        }
+
+        #[test]
+        fn empty() {
+            assert_eq!(ltrim_hex(""), "");
+        }
+
+        #[test]
+        fn nonhex() {
+            assert_eq!(ltrim_hex("zzz"), "zzz");
         }
     }
 }
