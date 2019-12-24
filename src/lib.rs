@@ -137,7 +137,7 @@ use doc_comment::doc_comment;
 use embedded_hal::serial;
 use nb::block;
 
-use crate::errors::{Error, JoinError, TxError, RnResult};
+use crate::errors::{Error, JoinError, RnResult, TxError};
 
 const CR: u8 = 0x0d;
 const LF: u8 = 0x0a;
@@ -484,7 +484,8 @@ where
     }
 
     hex_setter_getter!(
-        "devaddr", 4,
+        "devaddr",
+        4,
         "the unique network device address",
         set_dev_addr_hex,
         set_dev_addr_slice,
@@ -493,7 +494,8 @@ where
     );
 
     hex_setter_getter!(
-        "deveui", 8,
+        "deveui",
+        8,
         "the globally unique device identifier",
         set_dev_eui_hex,
         set_dev_eui_slice,
@@ -502,7 +504,8 @@ where
     );
 
     hex_setter_getter!(
-        "appeui", 8,
+        "appeui",
+        8,
         "the globally unique application identifier",
         set_app_eui_hex,
         set_app_eui_slice,
@@ -511,7 +514,8 @@ where
     );
 
     hex_setter_getter!(
-        "nwkskey", 16,
+        "nwkskey",
+        16,
         "the network session key",
         set_network_session_key_hex,
         set_network_session_key_slice,
@@ -520,7 +524,8 @@ where
     );
 
     hex_setter_getter!(
-        "appskey", 16,
+        "appskey",
+        16,
         "the application session key",
         set_app_session_key_hex,
         set_app_session_key_slice,
@@ -529,7 +534,8 @@ where
     );
 
     hex_setter_getter!(
-        "appkey", 16,
+        "appkey",
+        16,
         "the application key",
         set_app_key_hex,
         set_app_key_slice,
@@ -546,7 +552,7 @@ where
 
         // First response is whether the join procedure was initialized properly.
         match self.send_raw_command_str(&["mac join ", mode_str])? {
-            "ok" => {},
+            "ok" => {}
             "invalid_param" => return Err(JoinError::BadParameter),
             "keys_not_init" => return Err(JoinError::KeysNotInit),
             "no_free_ch" => return Err(JoinError::NoFreeChannel),
@@ -588,7 +594,7 @@ where
 
         // First response is whether the uplink transmission could be initialized.
         match self.send_raw_command(&["mac tx ", mode_str, " ", port_str, " ", data])? {
-            b"ok" => {},
+            b"ok" => {}
             b"invalid_param" => return Err(TxError::BadParameter),
             b"not_joined" => return Err(TxError::NotJoined),
             b"no_free_ch" => return Err(TxError::NoFreeChannel),
@@ -611,8 +617,8 @@ where
                 // Get port
                 let _ = parts.next().ok_or(TxError::Other(Error::ParsingError))?;
                 let port_str = parts.next().ok_or(TxError::Other(Error::ParsingError))?;
-                let port = u8::from_str(&port_str)
-                    .map_err(|_| TxError::Other(Error::ParsingError))?;
+                let port =
+                    u8::from_str(&port_str).map_err(|_| TxError::Other(Error::ParsingError))?;
                 utils::validate_port(port, TxError::Other(Error::ParsingError))?;
 
                 // Get data
@@ -622,7 +628,7 @@ where
                 }
 
                 Ok(Some(Downlink { port, hexdata }))
-            },
+            }
             _ => Err(TxError::UnknownResponse),
         }
     }
@@ -724,8 +730,14 @@ mod tests {
         let mut rn = rn2483_868(mock.clone());
         assert_eq!(rn.set_dev_addr_hex("010203f"), Err(Error::BadParameter));
         assert_eq!(rn.set_dev_addr_hex("010203fff"), Err(Error::BadParameter));
-        assert_eq!(rn.set_dev_eui_hex("0004a30b001a55e"), Err(Error::BadParameter));
-        assert_eq!(rn.set_dev_eui_hex("0004a30b001a55edx"), Err(Error::BadParameter));
+        assert_eq!(
+            rn.set_dev_eui_hex("0004a30b001a55e"),
+            Err(Error::BadParameter)
+        );
+        assert_eq!(
+            rn.set_dev_eui_hex("0004a30b001a55edx"),
+            Err(Error::BadParameter)
+        );
         mock.done();
     }
 
@@ -773,7 +785,9 @@ mod tests {
     #[test]
     fn set_dev_eui_slice() {
         let (mut mock, mut rn) = _set_dev_eui();
-        assert!(rn.set_dev_eui_slice(&[0x00, 0x04, 0xa3, 0x0b, 0x00, 0x1a, 0x55, 0xed]).is_ok());
+        assert!(rn
+            .set_dev_eui_slice(&[0x00, 0x04, 0xa3, 0x0b, 0x00, 0x1a, 0x55, 0xed])
+            .is_ok());
         mock.done();
     }
 
@@ -864,7 +878,10 @@ mod tests {
             ];
             let mut mock = SerialMock::new(&expectations);
             let mut rn = rn2483_868(mock.clone());
-            assert_eq!(rn.transmit_hex(ConfirmationMode::Unconfirmed, 42, "23ff"), Ok(None));
+            assert_eq!(
+                rn.transmit_hex(ConfirmationMode::Unconfirmed, 42, "23ff"),
+                Ok(None)
+            );
             mock.done();
         }
 
@@ -876,7 +893,10 @@ mod tests {
             ];
             let mut mock = SerialMock::new(&expectations);
             let mut rn = rn2483_868(mock.clone());
-            assert_eq!(rn.transmit_hex(ConfirmationMode::Confirmed, 42, "23ff"), Ok(None));
+            assert_eq!(
+                rn.transmit_hex(ConfirmationMode::Confirmed, 42, "23ff"),
+                Ok(None)
+            );
             mock.done();
         }
 

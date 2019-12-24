@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use linux_embedded_hal::Serial;
-use rn2xx3::{Driver, Freq868, rn2483_868};
+use rn2xx3::{rn2483_868, Driver, Freq868};
 use serial::{self, core::SerialPort};
 
 pub fn init_rn(dev: &str) -> Driver<Freq868, Serial> {
