@@ -12,6 +12,10 @@ Possible log types:
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
 
+### v0.1.2 (2019-12-24)
+
+- [added] Make this crate `no_std` compatible
+
 ### v0.1.1 (2019-12-06)
 
 Only a metadata update (to ensure that the README gets rendered on crates.io).

@@ -8,6 +8,7 @@ Set variables:
 Update version numbers:
 
     $ vim -p Cargo.toml
+    $ cargo update -p rn2xx3
 
 Update changelog:
 
