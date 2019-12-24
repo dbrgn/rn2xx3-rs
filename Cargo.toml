@@ -12,7 +12,7 @@ categories = ["embedded", "hardware-support", "no-std"]
 edition = "2018"
 
 [dependencies]
-base16 = { version = "0.2", features = [] }
+base16 = { version = "0.2", features = [], default-features = false }
 doc-comment = "0.3"
 embedded-hal = "0.2"
 nb = "0.1"

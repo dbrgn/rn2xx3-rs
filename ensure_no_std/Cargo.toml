@@ -5,7 +5,7 @@ authors = ["Danilo Bargen <mail@dbrgn.ch>"]
 edition = "2018"
 
 [dependencies]
-#rn2xx3 = { path = ".." }
+rn2xx3 = { path = ".." }
 
 [profile.dev]
 panic = "abort"
