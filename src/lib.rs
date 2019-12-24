@@ -123,6 +123,9 @@
 //! ```
 //!
 //! For more examples, refer to the `examples` directory in the source repository.
+
+#![no_std]
+
 mod errors;
 mod utils;
 
@@ -373,10 +376,10 @@ where
         if addr < 0x300 || addr > 0x3ff {
             return Err(Error::BadParameter);
         }
-        let hex_addr = format!("{:x}", addr);
+        let hex_addr = base16::encode_lower(&addr.to_be_bytes());
         let hex_byte_bytes = base16::encode_byte_l(byte);
         let hex_byte = from_utf8(&hex_byte_bytes).unwrap();
-        let args = ["sys set nvm ", &hex_addr, " ", &hex_byte];
+        let args = ["sys set nvm ", utils::ltrim_hex(&hex_addr), " ", &hex_byte];
         self.send_raw_command_ok(&args)
     }
 
@@ -388,8 +391,8 @@ where
         if addr < 0x300 || addr > 0x3ff {
             return Err(Error::BadParameter);
         }
-        let hex_addr = format!("{:x}", addr);
-        let response = self.send_raw_command(&["sys get nvm ", &hex_addr])?;
+        let hex_addr = base16::encode_lower(&addr.to_be_bytes());
+        let response = self.send_raw_command(&["sys get nvm ", utils::ltrim_hex(&hex_addr)])?;
         if response.len() != 2 {
             return Err(Error::ParsingError);
         }
@@ -457,7 +460,7 @@ macro_rules! hex_setter_getter {
                 Ok(buf)
             }
         }
-    }
+    };
 }
 
 /// MAC commands.
