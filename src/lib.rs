@@ -376,9 +376,18 @@ where
         if addr < 0x300 || addr > 0x3ff {
             return Err(Error::BadParameter);
         }
-        let hex_addr = base16::encode_lower(&addr.to_be_bytes());
+
+        let mut hex_addr_buf = [0; 4];
+        let addr_buf_byte_count = base16::encode_config_slice(
+            &addr.to_be_bytes(),
+            base16::EncodeLower,
+            &mut hex_addr_buf,
+        );
+        let hex_addr = from_utf8(&hex_addr_buf[..addr_buf_byte_count]).unwrap();
+
         let hex_byte_bytes = base16::encode_byte_l(byte);
         let hex_byte = from_utf8(&hex_byte_bytes).unwrap();
+
         let args = ["sys set nvm ", utils::ltrim_hex(&hex_addr), " ", &hex_byte];
         self.send_raw_command_ok(&args)
     }
@@ -391,7 +400,15 @@ where
         if addr < 0x300 || addr > 0x3ff {
             return Err(Error::BadParameter);
         }
-        let hex_addr = base16::encode_lower(&addr.to_be_bytes());
+
+        let mut hex_addr_buf = [0; 4];
+        let addr_buf_byte_count = base16::encode_config_slice(
+            &addr.to_be_bytes(),
+            base16::EncodeLower,
+            &mut hex_addr_buf,
+        );
+        let hex_addr = from_utf8(&hex_addr_buf[..addr_buf_byte_count]).unwrap();
+
         let response = self.send_raw_command(&["sys get nvm ", utils::ltrim_hex(&hex_addr)])?;
         if response.len() != 2 {
             return Err(Error::ParsingError);

@@ -1,0 +1,14 @@
+[package]
+name = "ensure_no_std"
+version = "0.1.0"
+authors = ["Danilo Bargen <mail@dbrgn.ch>"]
+edition = "2018"
+
+[dependencies]
+rn2xx3 = { path = ".." }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

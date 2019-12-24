@@ -26,6 +26,11 @@ jobs:
         with:
           command: test
           args: --all-features
+      - name: Ensure that crate is no_std
+        uses: actions-rs/cargo@v1
+        with:
+          command: rustc
+          args: --manifest-path=ensure_no_std/Cargo.toml -- -C link-arg=-nostartfiles
 
   clippy:
     name: Clippy
