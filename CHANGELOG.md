@@ -12,6 +12,10 @@ Possible log types:
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
 
+### v0.1.3 (2019-12-25)
+
+- [fixed] Fix `no_std` compatibility
+
 ### v0.1.2 (2019-12-24)
 
 - [added] Make this crate `no_std` compatible
