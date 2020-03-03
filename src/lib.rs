@@ -137,7 +137,6 @@
 //!     [2020-03-03T20:41:42Z DEBUG rn2xx3] Received response: "RN2483 1.0.3 Mar 22 2017 06:00:42"
 //!     ...
 
-
 #![no_std]
 
 mod errors;
@@ -152,9 +151,9 @@ use embedded_hal::serial;
 use nb::block;
 
 #[cfg(feature = "logging")]
-use log;
-#[cfg(feature = "logging")]
 use core::fmt;
+#[cfg(feature = "logging")]
+use log;
 
 use crate::errors::{Error, JoinError, RnResult, TxError};
 
@@ -303,7 +302,10 @@ where
             match self.read_byte()? {
                 LF if self.read_buf[i - 1] == CR => {
                     #[cfg(feature = "logging")]
-                    log::debug!("Received response: {:?}", from_utf8(&self.read_buf[0..(i - 1)]).unwrap());
+                    log::debug!(
+                        "Received response: {:?}",
+                        from_utf8(&self.read_buf[0..(i - 1)]).unwrap_or("\"[invalid-utf8]\"")
+                    );
                     return Ok(&self.read_buf[0..(i - 1)]);
                 }
                 other => {
