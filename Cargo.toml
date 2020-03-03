@@ -15,9 +15,18 @@ edition = "2018"
 base16 = { version = "0.2", features = [], default-features = false }
 doc-comment = "0.3"
 embedded-hal = "0.2"
+log = { version = "0.4", optional = true }
 nb = "0.1"
 
 [dev-dependencies]
 embedded-hal-mock = "0.7"
+env_logger = "0.7"
 linux-embedded-hal = "0.3"
 serial = "0.4"
+
+[features]
+logging = ["log"]
+
+[[example]]
+name = "join_otaa"
+required-features = ["logging"]

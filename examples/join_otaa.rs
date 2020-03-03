@@ -3,9 +3,13 @@ mod common;
 use std::env;
 use std::io::{stdout, Write};
 
+use env_logger;
+
 use rn2xx3::{ConfirmationMode, JoinMode};
 
 fn main() {
+    env_logger::init();
+
     let args: Vec<String> = env::args().collect();
     if args.len() != 6 {
         println!("Join the network via OTAA and send an uplink.");

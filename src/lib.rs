@@ -123,6 +123,20 @@
 //! ```
 //!
 //! For more examples, refer to the `examples` directory in the source repository.
+//!
+//! ## Logging
+//!
+//! If you are running the driver from a platform that has access to `std`, you
+//! can also enable the optional `logging` feature to be able to see incoming
+//! and outgoing commands:
+//!
+//!     $ export RUST_LOG=debug
+//!     $ cargo run --features logging --example join_otaa ...
+//!     Resetting module...
+//!     [2020-03-03T20:41:42Z DEBUG rn2xx3] Sending command: "sys reset"
+//!     [2020-03-03T20:41:42Z DEBUG rn2xx3] Received response: "RN2483 1.0.3 Mar 22 2017 06:00:42"
+//!     ...
+
 
 #![no_std]
 
@@ -136,6 +150,11 @@ use base16;
 use doc_comment::doc_comment;
 use embedded_hal::serial;
 use nb::block;
+
+#[cfg(feature = "logging")]
+use log;
+#[cfg(feature = "logging")]
+use core::fmt;
 
 use crate::errors::{Error, JoinError, RnResult, TxError};
 
@@ -154,6 +173,19 @@ pub struct Freq915;
 impl Frequency for Freq433 {}
 impl Frequency for Freq868 {}
 impl Frequency for Freq915 {}
+
+#[cfg(feature = "logging")]
+struct LoggableStrSlice<'o, 'i>(&'o [&'i str]);
+
+#[cfg(feature = "logging")]
+impl fmt::Display for LoggableStrSlice<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for part in self.0 {
+            write!(f, "{}", part)?;
+        }
+        Ok(())
+    }
+}
 
 /// The main driver instance.
 pub struct Driver<F: Frequency, S> {
@@ -270,6 +302,8 @@ where
         loop {
             match self.read_byte()? {
                 LF if self.read_buf[i - 1] == CR => {
+                    #[cfg(feature = "logging")]
+                    log::debug!("Received response: {:?}", from_utf8(&self.read_buf[0..(i - 1)]).unwrap());
                     return Ok(&self.read_buf[0..(i - 1)]);
                 }
                 other => {
@@ -285,6 +319,8 @@ where
 
     /// Send a raw command to the module and return the response.
     pub fn send_raw_command(&mut self, command: &[&str]) -> RnResult<&[u8]> {
+        #[cfg(feature = "logging")]
+        log::debug!("Sending command: \"{}\"", LoggableStrSlice(command));
         for part in command {
             self.write_all(part.as_bytes())?;
         }
