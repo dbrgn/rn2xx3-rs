@@ -146,11 +146,13 @@ mod utils;
 
 use core::marker::PhantomData;
 use core::str::{from_utf8, FromStr};
+use core::time::Duration;
 
 use base16;
 use doc_comment::doc_comment;
 use embedded_hal::serial;
 use nb::block;
+use numtoa::NumToA;
 
 #[cfg(feature = "logging")]
 use core::fmt;
@@ -296,7 +298,7 @@ where
     /// Read a CR/LF terminated line from the serial port.
     ///
     /// The string is returned without the line termination.
-    fn read_line(&mut self) -> RnResult<&[u8]> {
+    pub fn read_line(&mut self) -> RnResult<&[u8]> {
         let buflen = self.read_buf.len();
         let mut i = 0;
         loop {
@@ -320,14 +322,24 @@ where
         }
     }
 
-    /// Send a raw command to the module and return the response.
-    pub fn send_raw_command(&mut self, command: &[&str]) -> RnResult<&[u8]> {
+    /// Send a raw command to the module and do not wait for the response.
+    ///
+    /// Note: If you use this for a command that returns a response (e.g.
+    /// `sleep`), you will have to manually read the response using the
+    /// `read_line()` method.
+    pub fn send_raw_command_nowait(&mut self, command: &[&str]) -> RnResult<()> {
         #[cfg(feature = "logging")]
         log::debug!("Sending command: \"{}\"", LoggableStrSlice(command));
         for part in command {
             self.write_all(part.as_bytes())?;
         }
         self.write_crlf()?;
+        Ok(())
+    }
+
+    /// Send a raw command to the module and return the response.
+    pub fn send_raw_command(&mut self, command: &[&str]) -> RnResult<&[u8]> {
+        self.send_raw_command_nowait(command)?;
         self.read_line()
     }
 
@@ -455,6 +467,32 @@ where
         let mut buf = [0; 1];
         base16::decode_slice(response, &mut buf).map_err(|_| Error::ParsingError)?;
         Ok(buf[0])
+    }
+
+    /// Put the system to sleep (with millisecond precision).
+    ///
+    /// The module can be forced to exit from sleep by sending a break
+    /// condition followed by a 0x55 character at the new baud rate (TODO).
+    ///
+    /// NOTE: This command will not wait for the module to wake up. You need to
+    /// manually call `read_line()` once the module has woken up.
+    pub fn sleep(&mut self, duration: Duration) -> RnResult<()> {
+        let secs: u64 = duration.as_secs();
+        let subsec_millis: u32 = duration.subsec_millis();
+
+        // Millis must be in the range [100, 2^32).
+        // Do this the awkward way to avoid using the u128 type that `as_millis` returns.
+        let millis: u32 = if secs == 0 && subsec_millis < 100 {
+            return Err(Error::BadParameter);
+        } else if (secs < 4_294_967) || (secs == 4_294_967 && subsec_millis <= 295) {
+            (secs * 1000) as u32 + duration.subsec_millis()
+        } else {
+            return Err(Error::BadParameter);
+        };
+
+        let mut buf = [0u8; 10];
+        self.send_raw_command_nowait(&["sys sleep ", millis.numtoa_str(10, &mut buf)])?;
+        Ok(())
     }
 }
 
@@ -774,6 +812,42 @@ mod tests {
         let mut mock = SerialMock::new(&expectations);
         let mut rn = rn2483_868(mock.clone());
         assert_eq!(rn.nvm_get(0x300).unwrap(), 0xff);
+        mock.done();
+    }
+
+    #[test]
+    fn sleep_min_max_duration() {
+        // Min duration: 100ms
+        let expectations = [Transaction::write_many(b"sys sleep 100\r\n")];
+        let mut mock = SerialMock::new(&expectations);
+        let mut rn = rn2483_868(mock.clone());
+        assert!(rn.sleep(Duration::from_millis(100)).is_ok());
+        mock.done();
+
+        // Max duration: (2**32)-1 ms
+        let expectations = [Transaction::write_many(b"sys sleep 4294967295\r\n")];
+        let mut mock = SerialMock::new(&expectations);
+        let mut rn = rn2483_868(mock.clone());
+        assert!(rn.sleep(Duration::from_millis((1 << 32) - 1)).is_ok());
+        mock.done();
+    }
+
+    #[test]
+    fn sleep_invalid_durations() {
+        let expectations = [];
+        let mut mock = SerialMock::new(&expectations);
+        let mut rn = rn2483_868(mock.clone());
+
+        assert_eq!(rn.sleep(Duration::from_millis(0)), Err(Error::BadParameter));
+        assert_eq!(
+            rn.sleep(Duration::from_millis(99)),
+            Err(Error::BadParameter)
+        );
+        assert_eq!(
+            rn.sleep(Duration::from_millis(1 << 32)),
+            Err(Error::BadParameter)
+        );
+
         mock.done();
     }
 
