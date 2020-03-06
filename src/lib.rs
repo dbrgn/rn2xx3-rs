@@ -396,6 +396,11 @@ where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
     F: Frequency,
 {
+    /// Destroy this driver instance, return the wrapped serial device.
+    pub fn destroy(self) -> S {
+        self.serial
+    }
+
     /// Reset and restart the RN module. Return the version string.
     pub fn reset(&mut self) -> RnResult<&str> {
         self.send_raw_command_str(&["sys reset"])
