@@ -130,12 +130,14 @@
 //! can also enable the optional `logging` feature to be able to see incoming
 //! and outgoing commands:
 //!
-//!     $ export RUST_LOG=debug
-//!     $ cargo run --features logging --example join_otaa ...
-//!     Resetting module...
-//!     [2020-03-03T20:41:42Z DEBUG rn2xx3] Sending command: "sys reset"
-//!     [2020-03-03T20:41:42Z DEBUG rn2xx3] Received response: "RN2483 1.0.3 Mar 22 2017 06:00:42"
-//!     ...
+//! ```text
+//! $ export RUST_LOG=debug
+//! $ cargo run --features logging --example join_otaa ...
+//! Resetting module...
+//! [2020-03-03T20:41:42Z DEBUG rn2xx3] Sending command: "sys reset"
+//! [2020-03-03T20:41:42Z DEBUG rn2xx3] Received response: "RN2483 1.0.3 Mar 22 2017 06:00:42"
+//! ...
+//! ```
 
 #![no_std]
 
