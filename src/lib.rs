@@ -141,7 +141,7 @@
 
 #![no_std]
 
-mod errors;
+pub mod errors;
 mod utils;
 
 use core::marker::PhantomData;
