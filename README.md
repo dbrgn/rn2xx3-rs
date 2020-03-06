@@ -6,6 +6,8 @@ the RN2903 LoRaWAN modules.
 Status: The library can join and transmit uplinks, but not all commands are
 handled yet.
 
+Docs: https://docs.rs/rn2xx3/
+
 
 ## Datasheets
 
