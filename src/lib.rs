@@ -161,7 +161,6 @@ use crate::errors::{Error, JoinError, RnResult, TxError};
 
 const CR: u8 = 0x0d;
 const LF: u8 = 0x0a;
-const OK: [u8; 2] = [b'o', b'k'];
 
 /// Marker trait implemented for all models / frequencies.
 pub trait Frequency {}
@@ -342,7 +341,7 @@ where
     /// is not 'OK', return `Error::CommandFailed`.
     fn send_raw_command_ok(&mut self, command: &[&str]) -> RnResult<()> {
         let response = self.send_raw_command(command)?;
-        if response == &OK {
+        if response == b"ok" {
             Ok(())
         } else {
             Err(Error::CommandFailed)
@@ -667,7 +666,7 @@ where
         match self.read_line()? {
             b"mac_tx_ok" => Ok(None),
             b"mac_err" => Err(TxError::TxUnsuccessful),
-            b"invalid_data_len" => return Err(TxError::InvalidDataLenth),
+            b"invalid_data_len" => Err(TxError::InvalidDataLenth),
             val if val.starts_with(b"mac_rx ") => {
                 let mut parts = from_utf8(val)?.split_ascii_whitespace();
 
