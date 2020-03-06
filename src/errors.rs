@@ -20,6 +20,8 @@ pub enum Error {
     CommandFailed,
     /// A bad parameter was supplied.
     BadParameter,
+    /// Device is in sleep mode.
+    SleepMode,
 }
 
 impl From<Utf8Error> for Error {

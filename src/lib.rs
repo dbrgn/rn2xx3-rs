@@ -191,9 +191,18 @@ impl fmt::Display for LoggableStrSlice<'_, '_> {
 
 /// The main driver instance.
 pub struct Driver<F: Frequency, S> {
+    /// Marker type with the module frequency.
     frequency: PhantomData<F>,
+
+    /// Serial port.
     serial: S,
+
+    /// Read buffer.
     read_buf: [u8; 64],
+
+    /// This flag is set when entering sleep mode. As long as it is set,
+    /// sending any command will be prevented.
+    sleep: bool,
 }
 
 /// List of all supported RN module models.
@@ -237,6 +246,7 @@ where
         frequency: PhantomData,
         serial,
         read_buf: [0; 64],
+        sleep: false,
     }
 }
 
@@ -250,6 +260,7 @@ where
         frequency: PhantomData,
         serial,
         read_buf: [0; 64],
+        sleep: false,
     }
 }
 
@@ -263,6 +274,7 @@ where
         frequency: PhantomData,
         serial,
         read_buf: [0; 64],
+        sleep: false,
     }
 }
 
@@ -273,17 +285,34 @@ where
     F: Frequency,
 {
     /// Write a single byte to the serial port.
+    ///
+    /// **Note:** For performance reasons, the `sleep` flag is not being
+    /// checked here. Make sure not to call this method while in sleep mode.
     fn write_byte(&mut self, byte: u8) -> RnResult<()> {
         block!(self.serial.write(byte)).map_err(|_| Error::SerialWrite)
     }
 
+    /// Ensure that the device is not currently in sleep mode.
+    ///
+    /// Returns `Error::SleepMode` if `self.sleep` is set.
+    fn ensure_not_in_sleep_mode(&self) -> RnResult<()> {
+        if self.sleep {
+            Err(Error::SleepMode)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Write CR+LF bytes.
     fn write_crlf(&mut self) -> RnResult<()> {
+        self.ensure_not_in_sleep_mode()?;
         self.write_byte(CR)?;
         self.write_byte(LF)
     }
 
     /// Write all bytes from the buffer to the serial port.
     fn write_all(&mut self, buffer: &[u8]) -> RnResult<()> {
+        self.ensure_not_in_sleep_mode()?;
         for byte in buffer {
             self.write_byte(*byte)?;
         }
@@ -324,7 +353,7 @@ where
 
     /// Send a raw command to the module and do not wait for the response.
     ///
-    /// Note: If you use this for a command that returns a response (e.g.
+    /// **Note:** If you use this for a command that returns a response (e.g.
     /// `sleep`), you will have to manually read the response using the
     /// `read_line()` method.
     pub fn send_raw_command_nowait(&mut self, command: &[&str]) -> RnResult<()> {
@@ -472,11 +501,15 @@ where
     /// Put the system to sleep (with millisecond precision).
     ///
     /// The module can be forced to exit from sleep by sending a break
-    /// condition followed by a 0x55 character at the new baud rate (TODO).
+    /// condition followed by a 0x55 character at the new baud rate.
     ///
-    /// NOTE: This command will not wait for the module to wake up. You need to
-    /// manually call `read_line()` once the module has woken up.
+    /// **Note:** This command is asynchronous, it will *not* wait for the module
+    /// to wake up. You need to call [`wait_for_wakeup()`][wait_for_wakeup] to
+    /// wait for the module before sending any other command.
+    ///
+    /// [wait_for_wakeup]: #method.wait_for_wakeup
     pub fn sleep(&mut self, duration: Duration) -> RnResult<()> {
+        // Split duration into seconds and milliseconds
         let secs: u64 = duration.as_secs();
         let subsec_millis: u32 = duration.subsec_millis();
 
@@ -492,7 +525,46 @@ where
 
         let mut buf = [0u8; 10];
         self.send_raw_command_nowait(&["sys sleep ", millis.numtoa_str(10, &mut buf)])?;
+        self.sleep = true;
         Ok(())
+    }
+
+    /// After [sleep mode][sleep] has been enabled, wait for wakeup and clear
+    /// the `sleep` flag.
+    ///
+    /// If a sleep is in progress, this will block until the module sends a
+    /// line on the serial bus.
+    ///
+    /// If the `sleep` flag is not set, then the method will return immediately
+    /// without a serial read unless the `force` flag is set to `true`. This is
+    /// required if you create a new driver instance for a module that is still
+    /// in sleep mode.
+    ///
+    /// **Note:** If the module responds with a response that is not the string
+    /// `"ok"`, a [`Error::ParsingError`][parsing-error] will be returned, but
+    /// the `sleep` flag will still be cleared (since the module is obviously
+    /// not in sleep mode anymore).
+    ///
+    /// [sleep]: #method.sleep
+    /// [parsing-error]: errors/enum.Error.html#variant.ParsingError
+    pub fn wait_for_wakeup(&mut self, force: bool) -> RnResult<()> {
+        // If no sleep is in progress, return immediately
+        if !force && !self.sleep {
+            return Ok(());
+        }
+
+        // Wait for "ok" response.
+        // If any response is returned, the `sleep` flag will be cleared.
+        match self.read_line()? {
+            b"ok" => {
+                self.sleep = false;
+                Ok(())
+            }
+            _ => {
+                self.sleep = false;
+                Err(Error::ParsingError)
+            }
+        }
     }
 }
 
@@ -815,42 +887,6 @@ mod tests {
         mock.done();
     }
 
-    #[test]
-    fn sleep_min_max_duration() {
-        // Min duration: 100ms
-        let expectations = [Transaction::write_many(b"sys sleep 100\r\n")];
-        let mut mock = SerialMock::new(&expectations);
-        let mut rn = rn2483_868(mock.clone());
-        assert!(rn.sleep(Duration::from_millis(100)).is_ok());
-        mock.done();
-
-        // Max duration: (2**32)-1 ms
-        let expectations = [Transaction::write_many(b"sys sleep 4294967295\r\n")];
-        let mut mock = SerialMock::new(&expectations);
-        let mut rn = rn2483_868(mock.clone());
-        assert!(rn.sleep(Duration::from_millis((1 << 32) - 1)).is_ok());
-        mock.done();
-    }
-
-    #[test]
-    fn sleep_invalid_durations() {
-        let expectations = [];
-        let mut mock = SerialMock::new(&expectations);
-        let mut rn = rn2483_868(mock.clone());
-
-        assert_eq!(rn.sleep(Duration::from_millis(0)), Err(Error::BadParameter));
-        assert_eq!(
-            rn.sleep(Duration::from_millis(99)),
-            Err(Error::BadParameter)
-        );
-        assert_eq!(
-            rn.sleep(Duration::from_millis(1 << 32)),
-            Err(Error::BadParameter)
-        );
-
-        mock.done();
-    }
-
     /// Validate length of value passed to generated methods.
     /// Ensure that nothing is read/written to/from the serial device.
     #[test]
@@ -919,6 +955,100 @@ mod tests {
             .set_dev_eui_slice(&[0x00, 0x04, 0xa3, 0x0b, 0x00, 0x1a, 0x55, 0xed])
             .is_ok());
         mock.done();
+    }
+
+    mod sleep {
+        use super::*;
+
+        #[test]
+        fn sleep_min_max_duration() {
+            // Min duration: 100ms
+            let expectations = [Transaction::write_many(b"sys sleep 100\r\n")];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert!(rn.sleep(Duration::from_millis(100)).is_ok());
+            mock.done();
+
+            // Max duration: (2**32)-1 ms
+            let expectations = [Transaction::write_many(b"sys sleep 4294967295\r\n")];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert!(rn.sleep(Duration::from_millis((1 << 32) - 1)).is_ok());
+            mock.done();
+        }
+
+        #[test]
+        fn sleep_invalid_durations() {
+            let expectations = [];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+
+            assert_eq!(rn.sleep(Duration::from_millis(0)), Err(Error::BadParameter));
+            assert_eq!(
+                rn.sleep(Duration::from_millis(99)),
+                Err(Error::BadParameter)
+            );
+            assert_eq!(
+                rn.sleep(Duration::from_millis(1 << 32)),
+                Err(Error::BadParameter)
+            );
+
+            mock.done();
+        }
+
+        /// While the sleep mode flag is set, don't issue any serial writes.
+        #[test]
+        fn sleep_mode_no_write() {
+            let expectations = [Transaction::write_many(b"sys sleep 1000\r\n")];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+
+            // Put device into sleep mode
+            rn.sleep(Duration::from_secs(1)).unwrap();
+
+            // A write call should now fail without causing a write transaction
+            assert_eq!(rn.write_all(b"123"), Err(Error::SleepMode));
+            assert_eq!(rn.write_crlf(), Err(Error::SleepMode));
+            mock.done();
+        }
+
+        /// Waiting for wakeup will return immediately (without a read) if no
+        /// sleep is in progress.
+        #[test]
+        fn wait_for_wakeup_immediate() {
+            // Waiting for wakeup should not cause a read transaction...
+            let expectations = [];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert_eq!(rn.wait_for_wakeup(false), Ok(()));
+            assert_eq!(rn.wait_for_wakeup(false), Ok(()));
+            assert_eq!(rn.wait_for_wakeup(false), Ok(()));
+            mock.done();
+
+            // ...unless the `force` flag is set.
+            let expectations = [Transaction::read_many(b"ok\r\n")];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert_eq!(rn.wait_for_wakeup(true), Ok(()));
+            mock.done();
+        }
+
+        /// Waiting for wakeup will handle non-"ok" responses as errors.
+        #[test]
+        fn wait_for_wakeup_errors() {
+            let expectations = [Transaction::read_many(b"ohno\r\n")];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            rn.sleep = true;
+
+            // Parsing the response will return an error
+            assert_eq!(rn.wait_for_wakeup(false), Err(Error::ParsingError));
+
+            // But the sleep flag will still be cleared
+            assert!(!rn.sleep);
+
+            mock.done();
+        }
     }
 
     mod join {
