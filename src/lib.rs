@@ -1,6 +1,7 @@
 //! # RN2xx3
 //!
-//! Driver for Microchip RN2483 / RN2903 LoRaWAN modules.
+//! A `no_std` / `embedded_hal` compatible Rust driver for the RN2483 and
+//! the RN2903 LoRaWAN modules. The library will not do any dynamic allocations.
 //!
 //! ## Usage
 //!
