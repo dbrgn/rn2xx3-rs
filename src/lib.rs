@@ -145,6 +145,7 @@
 pub mod errors;
 mod utils;
 
+use core::convert::TryFrom;
 use core::marker::PhantomData;
 use core::str::{from_utf8, FromStr};
 use core::time::Duration;
@@ -229,6 +230,104 @@ pub enum ConfirmationMode {
     Confirmed,
     /// No confirmation is expected.
     Unconfirmed,
+}
+
+/// The data rates valid in Europe and China.
+///
+/// Frequencies:
+///
+/// - EU 863–870 MHz (LoRaWAN Specification (2015), Page 35, Table 14)
+/// - CN 779–787 MHz (LoRaWAN Specification (2015), Page 44, Table 25)
+/// - EU 433 MHz (LoRaWAN Specification (2015), Page 48, Table 31)
+pub enum DataRateEuCn {
+    /// Data Rate 0: SF 12 BW 125 (250 bit/s)
+    Sf12Bw125,
+    /// Data Rate 1: SF 11 BW 125 (440 bit/s)
+    Sf11Bw125,
+    /// Data Rate 2: SF 10 BW 125 (980 bit/s)
+    Sf10Bw125,
+    /// Data Rate 3: SF 9 BW 125 (1760 bit/s)
+    Sf9Bw125,
+    /// Data Rate 4: SF 8 BW 125 (3125 bit/s)
+    Sf8Bw125,
+    /// Data Rate 5: SF 7 BW 125 (5470 bit/s)
+    Sf7Bw125,
+    /// Data Rate 6: SF 7 BW 250 (11000 bit/s)
+    Sf7Bw250,
+}
+
+impl From<DataRateEuCn> for &str {
+    fn from(dr: DataRateEuCn) -> Self {
+        match dr {
+            DataRateEuCn::Sf12Bw125 => "0",
+            DataRateEuCn::Sf11Bw125 => "1",
+            DataRateEuCn::Sf10Bw125 => "2",
+            DataRateEuCn::Sf9Bw125 => "3",
+            DataRateEuCn::Sf8Bw125 => "4",
+            DataRateEuCn::Sf7Bw125 => "5",
+            DataRateEuCn::Sf7Bw250 => "6",
+        }
+    }
+}
+
+impl TryFrom<&str> for DataRateEuCn {
+    type Error = Error;
+    fn try_from(val: &str) -> Result<Self, Self::Error> {
+        match val {
+            "0" => Ok(DataRateEuCn::Sf12Bw125),
+            "1" => Ok(DataRateEuCn::Sf11Bw125),
+            "2" => Ok(DataRateEuCn::Sf10Bw125),
+            "3" => Ok(DataRateEuCn::Sf9Bw125),
+            "4" => Ok(DataRateEuCn::Sf8Bw125),
+            "5" => Ok(DataRateEuCn::Sf7Bw125),
+            "6" => Ok(DataRateEuCn::Sf7Bw250),
+            _ => Err(Error::ParsingError),
+        }
+    }
+}
+
+/// The data rates valid in the USA.
+///
+/// Frequencies:
+///
+/// - US 902–928 MHz (LoRaWAN Specification (2015), Page 40, Table 18)
+pub enum DataRateUs {
+    /// Data Rate 0: SF 10 BW 125 (980 bit/s)
+    Sf10Bw125,
+    /// Data Rate 1: SF 9 BW 125 (1760 bit/s)
+    Sf9Bw125,
+    /// Data Rate 2: SF 8 BW 125 (3125 bit/s)
+    Sf8Bw125,
+    /// Data Rate 3: SF 7 BW 125 (5470 bit/s)
+    Sf7Bw125,
+    /// Data Rate 4: SF 8 BW 500 (12500 bit/s)
+    Sf8Bw500,
+}
+
+impl From<DataRateUs> for &str {
+    fn from(dr: DataRateUs) -> Self {
+        match dr {
+            DataRateUs::Sf10Bw125 => "0",
+            DataRateUs::Sf9Bw125 => "1",
+            DataRateUs::Sf8Bw125 => "2",
+            DataRateUs::Sf7Bw125 => "3",
+            DataRateUs::Sf8Bw500 => "4",
+        }
+    }
+}
+
+impl TryFrom<&str> for DataRateUs {
+    type Error = Error;
+    fn try_from(val: &str) -> Result<Self, Self::Error> {
+        match val {
+            "0" => Ok(DataRateUs::Sf10Bw125),
+            "1" => Ok(DataRateUs::Sf9Bw125),
+            "2" => Ok(DataRateUs::Sf8Bw125),
+            "3" => Ok(DataRateUs::Sf7Bw125),
+            "4" => Ok(DataRateUs::Sf8Bw500),
+            _ => Err(Error::ParsingError),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -663,8 +762,8 @@ where
     /// configuration will be initialized with the last saved parameters.
     ///
     /// The LoRaWAN Class A protocol configuration savable parameters are:
-    /// `band`, `deveui`, `appeui`, `appkey`, `nwkskey`, `appskey`, `devaddr`,
-    /// `ch freq`, `ch dcycle`, `ch drrange`, `ch status`.
+    /// `band`, `deveui`, `appeui`, `appkey`, `nwkskey`, `appskey`, `devaddr`
+    /// as well as all channel parameters (e.g. frequeny, duty cycle, data).
     pub fn save_config(&mut self) -> RnResult<()> {
         self.send_raw_command_ok(&["mac save"])
     }
@@ -825,6 +924,57 @@ where
         let mut buf = [0; 256];
         let bytes = base16::encode_config_slice(data, base16::EncodeLower, &mut buf);
         self.transmit_hex(mode, port, from_utf8(&buf[0..bytes])?)
+    }
+}
+
+/// MAC commands for 433 MHz modules.
+impl<S, E> Driver<Freq433, S>
+where
+    S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
+{
+    /// Set the data rate to be used for the following transmissions.
+    pub fn set_data_rate(&mut self, data_rate: DataRateEuCn) -> RnResult<()> {
+        self.send_raw_command_ok(&["mac set dr ", data_rate.into()])
+    }
+
+    /// Return the currently configured data rate.
+    pub fn get_data_rate(&mut self) -> RnResult<DataRateEuCn> {
+        let dr = self.send_raw_command_str(&["mac get dr"])?;
+        DataRateEuCn::try_from(dr)
+    }
+}
+
+/// MAC commands for 868 MHz modules.
+impl<S, E> Driver<Freq868, S>
+where
+    S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
+{
+    /// Set the data rate to be used for the following transmissions.
+    pub fn set_data_rate(&mut self, data_rate: DataRateEuCn) -> RnResult<()> {
+        self.send_raw_command_ok(&["mac set dr ", data_rate.into()])
+    }
+
+    /// Return the currently configured data rate.
+    pub fn get_data_rate(&mut self) -> RnResult<DataRateEuCn> {
+        let dr = self.send_raw_command_str(&["mac get dr"])?;
+        DataRateEuCn::try_from(dr)
+    }
+}
+
+/// MAC commands for 915 MHz modules.
+impl<S, E> Driver<Freq915, S>
+where
+    S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
+{
+    /// Set the data rate to be used for the following transmissions.
+    pub fn set_data_rate(&mut self, data_rate: DataRateUs) -> RnResult<()> {
+        self.send_raw_command_ok(&["mac set dr ", data_rate.into()])
+    }
+
+    /// Return the currently configured data rate.
+    pub fn get_data_rate(&mut self) -> RnResult<DataRateUs> {
+        let dr = self.send_raw_command_str(&["mac get dr"])?;
+        DataRateUs::try_from(dr)
     }
 }
 
