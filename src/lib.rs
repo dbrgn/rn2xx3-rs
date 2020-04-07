@@ -574,13 +574,11 @@ where
     }
 }
 
+/// Macro to generate setters and getters for MAC parameters.
 macro_rules! hex_setter_getter {
     (
-        $field:expr, $bytes:expr,
-        $descr:expr,
-        $set_hex:ident, $set_slice:ident,
-        $get_hex:ident, $get_slice:ident,
-        $(,)?
+        $field:expr, $bytes:expr, $descr:expr,
+        $set_hex:ident, $set_slice:ident
     ) => {
         doc_comment! {
             concat!(
@@ -615,6 +613,14 @@ macro_rules! hex_setter_getter {
                 self.$set_hex(from_utf8(&buf)?)
             }
         }
+    };
+    (
+        $field:expr, $bytes:expr, $descr:expr,
+        $set_hex:ident, $set_slice:ident,
+        $get_hex:ident, $get_slice:ident,
+        $(,)?
+    ) => {
+        hex_setter_getter!($field, $bytes, $descr, $set_hex, $set_slice);
 
         doc_comment! {
             concat!("Get ", $descr, " as hex str."),
@@ -632,6 +638,14 @@ macro_rules! hex_setter_getter {
                 Ok(buf)
             }
         }
+    };
+
+    // Allow trailing commas
+    ($field:expr, $bytes:expr, $descr:expr, $set_hex:ident, $set_slice:ident,) => {
+        hex_setter_getter!($field, $bytes, $descr, $set_hex, $set_slice);
+    };
+    ($field:expr, $bytes:expr, $descr:expr, $set_hex:ident, $set_slice:ident, $get_hex:ident, $get_slice:ident,) => {
+        hex_setter_getter!($field, $bytes, $descr, $set_hex, $set_slice, $get_hex, $get_slice);
     };
 }
 
@@ -691,8 +705,6 @@ where
         "the network session key",
         set_network_session_key_hex,
         set_network_session_key_slice,
-        get_network_session_key_hex,
-        get_network_session_key_slice,
     );
 
     hex_setter_getter!(
@@ -701,8 +713,6 @@ where
         "the application session key",
         set_app_session_key_hex,
         set_app_session_key_slice,
-        get_app_session_key_hex,
-        get_app_session_key_slice,
     );
 
     hex_setter_getter!(
@@ -711,8 +721,6 @@ where
         "the application key",
         set_app_key_hex,
         set_app_key_slice,
-        get_app_key_hex,
-        get_app_key_slice,
     );
 
     /// Join the network.
