@@ -963,6 +963,32 @@ mod tests {
         mock.done();
     }
 
+    fn _get_dev_eui() -> (SerialMock<u8>, Driver<Freq868, SerialMock<u8>>) {
+        let expectations = [
+            Transaction::write_many(b"mac get deveui\r\n".as_ref()),
+            Transaction::read_many(b"0004a30b001a55ed\r\n"),
+        ];
+        let mock = SerialMock::new(&expectations);
+        let rn = rn2483_868(mock.clone());
+        (mock, rn)
+    }
+
+    #[test]
+    fn get_dev_eui_hex() {
+        let (mut mock, mut rn) = _get_dev_eui();
+        let deveui = rn.get_dev_eui_hex().unwrap();
+        assert_eq!(deveui, "0004a30b001a55ed");
+        mock.done();
+    }
+
+    #[test]
+    fn get_dev_eui_slice() {
+        let (mut mock, mut rn) = _get_dev_eui();
+        let deveui = rn.get_dev_eui_slice().unwrap();
+        assert_eq!(deveui, [0x00, 0x04, 0xa3, 0x0b, 0x00, 0x1a, 0x55, 0xed]);
+        mock.done();
+    }
+
     mod sleep {
         use super::*;
 
