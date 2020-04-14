@@ -239,6 +239,7 @@ pub enum ConfirmationMode {
 /// - EU 863–870 MHz (LoRaWAN Specification (2015), Page 35, Table 14)
 /// - CN 779–787 MHz (LoRaWAN Specification (2015), Page 44, Table 25)
 /// - EU 433 MHz (LoRaWAN Specification (2015), Page 48, Table 31)
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum DataRateEuCn {
     /// Data Rate 0: SF 12 BW 125 (250 bit/s)
     Sf12Bw125,
@@ -291,6 +292,7 @@ impl TryFrom<&str> for DataRateEuCn {
 /// Frequencies:
 ///
 /// - US 902–928 MHz (LoRaWAN Specification (2015), Page 40, Table 18)
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum DataRateUs {
     /// Data Rate 0: SF 10 BW 125 (980 bit/s)
     Sf10Bw125,
@@ -1183,6 +1185,18 @@ mod tests {
             let mut mock = SerialMock::new(&expectations);
             let mut rn = rn2483_868(mock.clone());
             assert!(rn.set_data_rate(DataRateEuCn::Sf12Bw125).is_ok());
+            mock.done();
+        }
+
+        #[test]
+        fn get_sf7_us() {
+            let expectations = [
+                Transaction::write_many(b"mac get dr\r\n"),
+                Transaction::read_many(b"4\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2903_915(mock.clone());
+            assert_eq!(rn.get_data_rate().unwrap(), DataRateUs::Sf8Bw500);
             mock.done();
         }
     }
