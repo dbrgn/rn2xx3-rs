@@ -12,6 +12,16 @@ Possible log types:
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
 
+### v0.1.4 (2020-04-15)
+
+- [added] Optional logging, enabled through Cargo feature (#7)
+- [added] Support for sleeping (#9)
+- [added] Support for setting and querying data rate (#16)
+- [added] Support for setting and querying ADR (#18)
+- [added] Allow destroying driver instance to reclaim serial peripheral (#9)
+- [changed] Expose error module (#8)
+- [fixed] Don't generate getters for MAC keys (#15)
+
 ### v0.1.3 (2019-12-25)
 
 - [fixed] Fix `no_std` compatibility
