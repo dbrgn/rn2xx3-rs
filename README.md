@@ -1,10 +1,10 @@
 # rn2xx3: Rust Driver for RN2483 / RN2903 LoRaWAN modules
 
 This is a `no_std` / `embedded_hal` compatible Rust driver for the RN2483 and
-the RN2903 LoRaWAN modules. The library will not do any dynamic allocations.
+the RN2903 LoRaWAN modules. The library works without any dynamic allocations.
 
 Status: The library can join and transmit uplinks, but not all commands are
-handled yet. For a list of commands, see
+handled yet. For a list of implemented (and yet to be implemented) commands, see
 [#10](https://github.com/dbrgn/rn2xx3-rs/issues/10).
 
 Docs: https://docs.rs/rn2xx3/
