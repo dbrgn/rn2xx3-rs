@@ -5,7 +5,7 @@ use std::io::{stdout, Write};
 
 use env_logger;
 
-use rn2xx3::{ConfirmationMode, JoinMode};
+use rn2xx3::{ConfirmationMode, DataRateEuCn, JoinMode};
 
 fn main() {
     env_logger::init();
@@ -39,6 +39,10 @@ fn main() {
     stdout().flush().expect("Could not flush stdout");
     rn.join(JoinMode::Otaa).expect("Could not join");
     println!("OK");
+
+    // Set data rate
+    rn.set_data_rate(DataRateEuCn::Sf9Bw125)
+        .expect("Could not set data rate");
 
     // Send data
     let port: u8 = args[4].parse().expect("Invalid port");
