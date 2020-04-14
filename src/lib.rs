@@ -824,6 +824,21 @@ where
         set_app_key_slice,
     );
 
+    /// Set whether the ADR (adaptive data rate) mechanism is enabled.
+    pub fn set_adr(&mut self, enabled: bool) -> RnResult<()> {
+        let state = if enabled { "on" } else { "off" };
+        self.send_raw_command_ok(&["mac set adr ", state])
+    }
+
+    /// Return whether the ADR (adaptive data rate) mechanism is enabled.
+    pub fn get_adr(&mut self) -> RnResult<bool> {
+        match self.send_raw_command_str(&["mac get adr"])? {
+            "on" => Ok(true),
+            "off" => Ok(false),
+            _ => Err(Error::ParsingError),
+        }
+    }
+
     /// Join the network.
     pub fn join(&mut self, mode: JoinMode) -> Result<(), JoinError> {
         let mode_str = match mode {
@@ -1197,6 +1212,58 @@ mod tests {
             let mut mock = SerialMock::new(&expectations);
             let mut rn = rn2903_915(mock.clone());
             assert_eq!(rn.get_data_rate().unwrap(), DataRateUs::Sf8Bw500);
+            mock.done();
+        }
+    }
+
+    mod adr {
+        use super::*;
+
+        #[test]
+        fn get_on() {
+            let expectations = [
+                Transaction::write_many(b"mac get adr\r\n"),
+                Transaction::read_many(b"on\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert!(rn.get_adr().unwrap());
+            mock.done();
+        }
+
+        #[test]
+        fn get_off() {
+            let expectations = [
+                Transaction::write_many(b"mac get adr\r\n"),
+                Transaction::read_many(b"off\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert!(!rn.get_adr().unwrap());
+            mock.done();
+        }
+
+        #[test]
+        fn get_invalid() {
+            let expectations = [
+                Transaction::write_many(b"mac get adr\r\n"),
+                Transaction::read_many(b"of\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert_eq!(rn.get_adr().unwrap_err(), Error::ParsingError);
+            mock.done();
+        }
+
+        #[test]
+        fn set() {
+            let expectations = [
+                Transaction::write_many(b"mac set adr on\r\n"),
+                Transaction::read_many(b"ok\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert!(rn.set_adr(true).is_ok());
             mock.done();
         }
     }
