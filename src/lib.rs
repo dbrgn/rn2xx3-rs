@@ -1147,6 +1147,46 @@ mod tests {
         mock.done();
     }
 
+    mod data_rate {
+        use super::*;
+
+        #[test]
+        fn set_sf9_eucn() {
+            let expectations = [
+                Transaction::write_many(b"mac set dr 3\r\n"),
+                Transaction::read_many(b"ok\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert!(rn.set_data_rate(DataRateEuCn::Sf9Bw125).is_ok());
+            mock.done();
+        }
+
+        #[test]
+        fn set_sf9_us() {
+            let expectations = [
+                Transaction::write_many(b"mac set dr 1\r\n"),
+                Transaction::read_many(b"ok\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2903_915(mock.clone());
+            assert!(rn.set_data_rate(DataRateUs::Sf9Bw125).is_ok());
+            mock.done();
+        }
+
+        #[test]
+        fn set_sf12_eucn() {
+            let expectations = [
+                Transaction::write_many(b"mac set dr 0\r\n"),
+                Transaction::read_many(b"ok\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            assert!(rn.set_data_rate(DataRateEuCn::Sf12Bw125).is_ok());
+            mock.done();
+        }
+    }
+
     mod sleep {
         use super::*;
 
