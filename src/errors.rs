@@ -22,6 +22,8 @@ pub enum Error {
     BadParameter,
     /// Device is in sleep mode.
     SleepMode,
+    /// The module is in an invalid state.
+    InvalidState,
 }
 
 impl From<Utf8Error> for Error {
