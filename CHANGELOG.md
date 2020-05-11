@@ -12,6 +12,10 @@ Possible log types:
 - `[security]` to invite users to upgrade in case of vulnerabilities.
 
 
+### Unreleased
+
+- [changed] Rename `destroy` method to `free`
+
 ### v0.1.4 (2020-04-15)
 
 - [added] Optional logging, enabled through Cargo feature (#7)

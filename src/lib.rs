@@ -1,7 +1,7 @@
 //! # RN2xx3
 //!
 //! A `no_std` / `embedded_hal` compatible Rust driver for the RN2483 and
-//! the RN2903 LoRaWAN modules. The library will not do any dynamic allocations.
+//! the RN2903 LoRaWAN modules. The library works without any dynamic allocations.
 //!
 //! ## Usage
 //!
@@ -499,7 +499,7 @@ where
     F: Frequency,
 {
     /// Destroy this driver instance, return the wrapped serial device.
-    pub fn destroy(self) -> S {
+    pub fn free(self) -> S {
         self.serial
     }
 
