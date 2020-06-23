@@ -174,7 +174,6 @@ use core::marker::PhantomData;
 use core::str::{from_utf8, FromStr};
 use core::time::Duration;
 
-use base16;
 use doc_comment::doc_comment;
 use embedded_hal::serial;
 use nb::block;
