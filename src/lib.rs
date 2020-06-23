@@ -71,6 +71,30 @@
 //! let rn = rn2xx3::rn2903_915(serialport);
 //! ```
 //!
+//! After initializing, it's a good idea to clear the serial buffers and ensure
+//! a "known good state".
+//!
+//! ```no_run
+//! # use std::time::Duration;
+//! # use linux_embedded_hal::Serial;
+//! # use serial::{self, core::SerialPort};
+//! # // Serial port settings
+//! # let settings = serial::PortSettings {
+//! #     baud_rate: serial::Baud57600,
+//! #     char_size: serial::Bits8,
+//! #     parity: serial::ParityNone,
+//! #     stop_bits: serial::Stop1,
+//! #     flow_control: serial::FlowNone,
+//! # };
+//! # use rn2xx3;
+//! # let mut port = serial::open("/dev/ttyACM0").expect("Could not open serial port");
+//! # port.configure(&settings).expect("Could not configure serial port");
+//! # port.set_timeout(Duration::from_secs(1)).expect("Could not set serial port timeout");
+//! # let serialport = Serial(port);
+//! # let mut rn = rn2xx3::rn2483_868(serialport);
+//! rn.ensure_known_state().expect("Error while preparing device");
+//! ```
+//!
 //! Now you can read information from the module and join, e.g. via OTAA:
 //!
 //! ```no_run
@@ -140,7 +164,7 @@
 //! ...
 //! ```
 
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
 pub mod errors;
 mod utils;
@@ -490,6 +514,61 @@ where
             Err(Error::CommandFailed)
         }
     }
+
+    /// Clear the module serial buffers and ensure a known good state.
+    ///
+    /// ## Implementation details
+    ///
+    /// This is done by first reading and discarding all available bytes from
+    /// the serial port.
+    ///
+    /// Afterwards, to ensure that there's no valid command in the input
+    /// buffer, the letter 'z' is sent, followed by a newline. There is no
+    /// valid command that ends with 'z' and it's not a valid hex character, so
+    /// the module should return `invalid_param`. If it doesn't, the same
+    /// procedure is repeated 2 more times until giving up.
+    ///
+    /// Unexpected errors while reading or writing are propagated to the
+    /// caller.
+    pub fn ensure_known_state(&mut self) -> RnResult<()> {
+        // First, clear the input buffer
+        loop {
+            match self.serial.read() {
+                Ok(_) => {
+                    // A byte was returned, continue reading
+                    #[cfg(feature = "logging")]
+                    log::debug!("Clearing input buffer: Discarded 1 byte");
+                }
+                Err(nb::Error::WouldBlock) => break,
+                Err(nb::Error::Other(_)) => return Err(Error::SerialRead),
+            }
+        }
+        #[cfg(feature = "logging")]
+        log::debug!("Input buffer is clear");
+
+        // Max 3 attempts
+        for _ in 0..3 {
+            #[cfg(feature = "logging")]
+            log::debug!("Check whether module is in a known state, expecting \"invalid_param\"");
+
+            // To ensure that there's no valid command in the input buffer, write
+            // the letter 'z' followed by CRLF.
+            self.write_byte(b'z')?;
+            self.write_crlf()?;
+
+            // Read the response, it should be "invalid_param".
+            match self.read_line()? {
+                b"invalid_param" => return Ok(()),
+                _other => {
+                    #[cfg(feature = "logging")]
+                    log::debug!("Error: Module returned \"{:?}\"", _other);
+                }
+            }
+        }
+
+        // Should not happen™
+        Err(Error::InvalidState)
+    }
 }
 
 /// System commands.
@@ -517,7 +596,7 @@ where
         self.send_raw_command_str(&["sys factoryRESET"])
     }
 
-    ///// Delete the current RN2483 module application firmware and prepare it
+    ///// Delete the current RN2483 module application firmware and ensure_known_state it
     ///// for firmware upgrade. The module bootloader is then ready to receive
     ///// new firmware.
     /////
@@ -1000,6 +1079,7 @@ mod tests {
     use super::*;
 
     use embedded_hal_mock::serial::{Mock as SerialMock, Transaction};
+    use embedded_hal_mock::MockError;
 
     const VERSION48: &str = "RN2483 1.0.3 Mar 22 2017 06:00:42";
     const VERSION90: &str = "RN2903 1.0.3 Mar 22 2017 06:00:42";
@@ -1501,6 +1581,107 @@ mod tests {
                 rn.transmit_slice(ConfirmationMode::Unconfirmed, 42, &[0x23, 0xff]),
                 Ok(None),
             );
+            mock.done();
+        }
+    }
+
+    mod ensure_known_state {
+        use super::*;
+
+        use std::io::ErrorKind;
+
+        #[test]
+        fn already_clean() {
+            let expectations = [
+                // Our initial buffer is empty
+                Transaction::read_error(nb::Error::WouldBlock),
+                // Expect the 'z' write
+                Transaction::write_many(b"z\r\n"),
+                // Read returns invalid_param
+                Transaction::read_many(b"invalid_param\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            rn.ensure_known_state().unwrap();
+            mock.done();
+        }
+
+        #[test]
+        fn non_empty_buffer() {
+            let expectations = [
+                // Our initial buffer still contains some bytes
+                Transaction::read_many(b"sys "),
+                Transaction::read_many(b"reset"),
+                Transaction::read_error(nb::Error::WouldBlock),
+                // Expect the 'z' write
+                Transaction::write_many(b"z\r\n"),
+                // Read returns invalid_param
+                Transaction::read_many(b"invalid_param\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            rn.ensure_known_state().unwrap();
+            mock.done();
+        }
+
+        #[test]
+        fn retry() {
+            let expectations = [
+                // Initial buffer empty
+                Transaction::read_error(nb::Error::WouldBlock),
+                // Expect the 'z' write
+                Transaction::write_many(b"z\r\n"),
+                // Read returns unexpected data
+                Transaction::read_many(b"ok\r\n"),
+                // Expect the 'z' write again (attempt 2)
+                Transaction::write_many(b"z\r\n"),
+                // Still unexpected data
+                Transaction::read_many(b"wtf\r\n"),
+                // Expect the 'z' write again (attempt 3)
+                Transaction::write_many(b"z\r\n"),
+                // Finally!
+                Transaction::read_many(b"invalid_param\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+            rn.ensure_known_state().unwrap();
+            mock.done();
+        }
+
+        #[test]
+        fn retry_failed() {
+            let expectations = [
+                // Initial buffer empty
+                Transaction::read_error(nb::Error::WouldBlock),
+                // Unexpected response for 3 consecutive attempts
+                Transaction::write_many(b"z\r\n"),
+                Transaction::read_many(b"uhm\r\n"),
+                Transaction::write_many(b"z\r\n"),
+                Transaction::read_many(b"lol\r\n"),
+                Transaction::write_many(b"z\r\n"),
+                Transaction::read_many(b"wat\r\n"),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+
+            // Fail after 3 attempts
+            assert_eq!(rn.ensure_known_state().unwrap_err(), Error::InvalidState);
+
+            mock.done();
+        }
+
+        #[test]
+        fn read_error() {
+            let expectations = [
+                // Read fails with an error
+                Transaction::read_error(nb::Error::Other(MockError::Io(ErrorKind::BrokenPipe))),
+            ];
+            let mut mock = SerialMock::new(&expectations);
+            let mut rn = rn2483_868(mock.clone());
+
+            // Errors while reading are propagated
+            assert_eq!(rn.ensure_known_state().unwrap_err(), Error::SerialRead);
+
             mock.done();
         }
     }

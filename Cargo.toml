@@ -20,7 +20,7 @@ nb = "0.1"
 numtoa = "0.2"
 
 [dev-dependencies]
-embedded-hal-mock = "0.7"
+embedded-hal-mock = "0.7.2"
 env_logger = "0.7"
 linux-embedded-hal = "0.3"
 serial = "0.4"
@@ -30,4 +30,8 @@ logging = ["log"]
 
 [[example]]
 name = "join_otaa"
+required-features = ["logging"]
+
+[[example]]
+name = "show_info"
 required-features = ["logging"]

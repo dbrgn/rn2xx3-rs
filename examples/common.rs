@@ -21,8 +21,12 @@ pub fn init_rn(dev: &str) -> Driver<Freq868, Serial> {
     port.set_timeout(Duration::from_secs(1))
         .expect("Could not set serial port timeout");
 
-    // Initialize driver
-    rn2483_868(Serial(port))
+    // Initialize and return driver
+    let mut driver = rn2483_868(Serial(port));
+    driver
+        .ensure_known_state()
+        .expect("Error in ensure_known_state()");
+    driver
 }
 
 #[allow(dead_code)]

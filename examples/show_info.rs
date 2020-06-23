@@ -2,7 +2,11 @@ mod common;
 
 use std::env;
 
+use env_logger;
+
 fn main() {
+    env_logger::init();
+
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         println!("Usage: {} <path-to-serial>", args[0]);
