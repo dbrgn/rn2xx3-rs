@@ -10,6 +10,14 @@ license = "MIT OR Apache-2.0"
 keywords = ["rn2483", "rn2903", "microchip", "lorawan", "embedded-hal-driver"]
 categories = ["embedded", "hardware-support", "no-std"]
 edition = "2018"
+include = [
+    "**/*.rs",
+    "Cargo.toml",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+]
 
 [dependencies]
 base16 = { version = "0.2", features = [], default-features = false }
