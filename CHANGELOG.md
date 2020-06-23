@@ -14,7 +14,11 @@ Possible log types:
 
 ### Unreleased
 
-- [changed] Rename `destroy` method to `free`
+
+### v0.2.0 (2020-06-23)
+
+- [added] Add `ensure_known_state` method (#22)
+- [changed] Rename `destroy` method to `free` (#21)
 
 ### v0.1.4 (2020-04-15)
 

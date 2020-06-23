@@ -1,6 +1,6 @@
 [package]
 name = "rn2xx3"
-version = "0.1.4"
+version = "0.2.0"
 authors = ["Danilo Bargen <mail@dbrgn.ch>"]
 documentation = "https://docs.rs/rn2xx3"
 description = "Rust driver for Microchip RN2483 and RN2903 LoRaWAN modules. [WIP]"  # todo: wip
