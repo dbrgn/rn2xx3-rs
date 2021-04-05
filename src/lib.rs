@@ -184,7 +184,7 @@ use core::fmt;
 #[cfg(feature = "logging")]
 use log;
 
-use crate::errors::{Error, JoinError, RnResult, TxError};
+use crate::errors::{Error, JoinError, ParsingError, RnResult, TxError};
 
 const CR: u8 = 0x0d;
 const LF: u8 = 0x0a;
@@ -295,7 +295,7 @@ impl From<DataRateEuCn> for &str {
 }
 
 impl TryFrom<&str> for DataRateEuCn {
-    type Error = Error;
+    type Error = ParsingError;
     fn try_from(val: &str) -> Result<Self, Self::Error> {
         match val {
             "0" => Ok(DataRateEuCn::Sf12Bw125),
@@ -305,7 +305,7 @@ impl TryFrom<&str> for DataRateEuCn {
             "4" => Ok(DataRateEuCn::Sf8Bw125),
             "5" => Ok(DataRateEuCn::Sf7Bw125),
             "6" => Ok(DataRateEuCn::Sf7Bw250),
-            _ => Err(Error::ParsingError),
+            _ => Err(ParsingError {}),
         }
     }
 }
@@ -342,7 +342,7 @@ impl From<DataRateUs> for &str {
 }
 
 impl TryFrom<&str> for DataRateUs {
-    type Error = Error;
+    type Error = ParsingError;
     fn try_from(val: &str) -> Result<Self, Self::Error> {
         match val {
             "0" => Ok(DataRateUs::Sf10Bw125),
@@ -350,7 +350,7 @@ impl TryFrom<&str> for DataRateUs {
             "2" => Ok(DataRateUs::Sf8Bw125),
             "3" => Ok(DataRateUs::Sf7Bw125),
             "4" => Ok(DataRateUs::Sf8Bw500),
-            _ => Err(Error::ParsingError),
+            _ => Err(ParsingError {}),
         }
     }
 }
@@ -413,14 +413,14 @@ where
     ///
     /// **Note:** For performance reasons, the `sleep` flag is not being
     /// checked here. Make sure not to call this method while in sleep mode.
-    fn write_byte(&mut self, byte: u8) -> RnResult<()> {
-        block!(self.serial.write(byte)).map_err(|_| Error::SerialWrite)
+    fn write_byte(&mut self, byte: u8) -> RnResult<(), E> {
+        block!(self.serial.write(byte)).map_err(|e| Error::SerialWrite(e))
     }
 
     /// Ensure that the device is not currently in sleep mode.
     ///
     /// Returns `Error::SleepMode` if `self.sleep` is set.
-    fn ensure_not_in_sleep_mode(&self) -> RnResult<()> {
+    fn ensure_not_in_sleep_mode(&self) -> RnResult<(), E> {
         if self.sleep {
             Err(Error::SleepMode)
         } else {
@@ -429,14 +429,14 @@ where
     }
 
     /// Write CR+LF bytes.
-    fn write_crlf(&mut self) -> RnResult<()> {
+    fn write_crlf(&mut self) -> RnResult<(), E> {
         self.ensure_not_in_sleep_mode()?;
         self.write_byte(CR)?;
         self.write_byte(LF)
     }
 
     /// Write all bytes from the buffer to the serial port.
-    fn write_all(&mut self, buffer: &[u8]) -> RnResult<()> {
+    fn write_all(&mut self, buffer: &[u8]) -> RnResult<(), E> {
         self.ensure_not_in_sleep_mode()?;
         for byte in buffer {
             self.write_byte(*byte)?;
@@ -445,14 +445,14 @@ where
     }
 
     /// Read a single byte from the serial port.
-    fn read_byte(&mut self) -> RnResult<u8> {
-        block!(self.serial.read()).map_err(|_| Error::SerialRead)
+    fn read_byte(&mut self) -> RnResult<u8, E> {
+        block!(self.serial.read()).map_err(|e| Error::SerialRead(e))
     }
 
     /// Read a CR/LF terminated line from the serial port.
     ///
     /// The string is returned without the line termination.
-    pub fn read_line(&mut self) -> RnResult<&[u8]> {
+    pub fn read_line(&mut self) -> RnResult<&[u8], E> {
         let buflen = self.read_buf.len();
         let mut i = 0;
         loop {
@@ -481,7 +481,7 @@ where
     /// **Note:** If you use this for a command that returns a response (e.g.
     /// `sleep`), you will have to manually read the response using the
     /// `read_line()` method.
-    pub fn send_raw_command_nowait(&mut self, command: &[&str]) -> RnResult<()> {
+    pub fn send_raw_command_nowait(&mut self, command: &[&str]) -> RnResult<(), E> {
         #[cfg(feature = "logging")]
         log::debug!("Sending command: \"{}\"", LoggableStrSlice(command));
         for part in command {
@@ -492,20 +492,20 @@ where
     }
 
     /// Send a raw command to the module and return the response.
-    pub fn send_raw_command(&mut self, command: &[&str]) -> RnResult<&[u8]> {
+    pub fn send_raw_command(&mut self, command: &[&str]) -> RnResult<&[u8], E> {
         self.send_raw_command_nowait(command)?;
         self.read_line()
     }
 
     /// Send a raw command and decode the resulting bytes to a `&str`.
-    pub fn send_raw_command_str(&mut self, command: &[&str]) -> RnResult<&str> {
+    pub fn send_raw_command_str(&mut self, command: &[&str]) -> RnResult<&str, E> {
         let bytes = self.send_raw_command(command)?;
         Ok(from_utf8(bytes)?)
     }
 
     /// Send a raw command that should be confirmed with 'OK'. If the response
     /// is not 'OK', return `Error::CommandFailed`.
-    fn send_raw_command_ok(&mut self, command: &[&str]) -> RnResult<()> {
+    fn send_raw_command_ok(&mut self, command: &[&str]) -> RnResult<(), E> {
         let response = self.send_raw_command(command)?;
         if response == b"ok" {
             Ok(())
@@ -529,7 +529,7 @@ where
     ///
     /// Unexpected errors while reading or writing are propagated to the
     /// caller.
-    pub fn ensure_known_state(&mut self) -> RnResult<()> {
+    pub fn ensure_known_state(&mut self) -> RnResult<(), E> {
         // First, clear the input buffer
         loop {
             match self.serial.read() {
@@ -539,7 +539,7 @@ where
                     log::debug!("Clearing input buffer: Discarded 1 byte");
                 }
                 Err(nb::Error::WouldBlock) => break,
-                Err(nb::Error::Other(_)) => return Err(Error::SerialRead),
+                Err(nb::Error::Other(e)) => return Err(Error::SerialRead(e)),
             }
         }
         #[cfg(feature = "logging")]
@@ -582,7 +582,7 @@ where
     }
 
     /// Reset and restart the RN module. Return the version string.
-    pub fn reset(&mut self) -> RnResult<&str> {
+    pub fn reset(&mut self) -> RnResult<&str, E> {
         self.send_raw_command_str(&["sys reset"])
     }
 
@@ -591,7 +591,7 @@ where
     ///
     /// All configuration parameters will be restored to factory default
     /// values. Return the version string.
-    pub fn factory_reset(&mut self) -> RnResult<&str> {
+    pub fn factory_reset(&mut self) -> RnResult<&str, E> {
         self.send_raw_command_str(&["sys factoryRESET"])
     }
 
@@ -608,17 +608,17 @@ where
     //}
 
     /// Return the preprogrammed EUI node address as uppercase hex string.
-    pub fn hweui(&mut self) -> RnResult<&str> {
+    pub fn hweui(&mut self) -> RnResult<&str, E> {
         self.send_raw_command_str(&["sys get hweui"])
     }
 
     /// Return the version string.
-    pub fn version(&mut self) -> RnResult<&str> {
+    pub fn version(&mut self) -> RnResult<&str, E> {
         self.send_raw_command_str(&["sys get ver"])
     }
 
     /// Return the model of the module.
-    pub fn model(&mut self) -> RnResult<Model> {
+    pub fn model(&mut self) -> RnResult<Model, E> {
         let version = self.version()?;
         match &version[0..6] {
             "RN2483" => Ok(Model::RN2483),
@@ -628,7 +628,7 @@ where
     }
 
     /// Measure and return the Vdd voltage in millivolts.
-    pub fn vdd(&mut self) -> RnResult<u16> {
+    pub fn vdd(&mut self) -> RnResult<u16, E> {
         let vdd = self.send_raw_command_str(&["sys get vdd"])?;
         vdd.parse().map_err(|_| Error::ParsingError)
     }
@@ -637,7 +637,7 @@ where
     ///
     /// The address must be between 0x300 and 0x3ff, otherwise
     /// `Error::BadParameter` is returned.
-    pub fn nvm_set(&mut self, addr: u16, byte: u8) -> RnResult<()> {
+    pub fn nvm_set(&mut self, addr: u16, byte: u8) -> RnResult<(), E> {
         if addr < 0x300 || addr > 0x3ff {
             return Err(Error::BadParameter);
         }
@@ -661,7 +661,7 @@ where
     ///
     /// The address must be between 0x300 and 0x3ff, otherwise
     /// `Error::BadParameter` is returned.
-    pub fn nvm_get(&mut self, addr: u16) -> RnResult<u8> {
+    pub fn nvm_get(&mut self, addr: u16) -> RnResult<u8, E> {
         if addr < 0x300 || addr > 0x3ff {
             return Err(Error::BadParameter);
         }
@@ -693,7 +693,7 @@ where
     /// wait for the module before sending any other command.
     ///
     /// [wait_for_wakeup]: #method.wait_for_wakeup
-    pub fn sleep(&mut self, duration: Duration) -> RnResult<()> {
+    pub fn sleep(&mut self, duration: Duration) -> RnResult<(), E> {
         // Split duration into seconds and milliseconds
         let secs: u64 = duration.as_secs();
         let subsec_millis: u32 = duration.subsec_millis();
@@ -732,7 +732,7 @@ where
     ///
     /// [sleep]: #method.sleep
     /// [parsing-error]: errors/enum.Error.html#variant.ParsingError
-    pub fn wait_for_wakeup(&mut self, force: bool) -> RnResult<()> {
+    pub fn wait_for_wakeup(&mut self, force: bool) -> RnResult<(), E> {
         // If no sleep is in progress, return immediately
         if !force && !self.sleep {
             return Ok(());
@@ -767,7 +767,7 @@ macro_rules! hex_setter_getter {
                 "\n\nThe parameter must be a ", stringify!($bytes), "-byte hex string, ",
                 "otherwise `Error::BadParameter` will be returned.",
             ),
-            pub fn $set_hex(&mut self, val: &str) -> RnResult<()> {
+            pub fn $set_hex(&mut self, val: &str) -> RnResult<(), E> {
                 if val.len() != $bytes * 2 {
                     return Err(Error::BadParameter);
                 }
@@ -783,7 +783,7 @@ macro_rules! hex_setter_getter {
                 "\n\nThe parameter must be a ", stringify!($bytes), "-byte ",
                 "big endian byte slice, otherwise `Error::BadParameter` will be returned.",
             ),
-            pub fn $set_slice(&mut self, val: &[u8]) -> RnResult<()> {
+            pub fn $set_slice(&mut self, val: &[u8]) -> RnResult<(), E> {
                 if val.len() != $bytes {
                     return Err(Error::BadParameter);
                 }
@@ -803,14 +803,14 @@ macro_rules! hex_setter_getter {
 
         doc_comment! {
             concat!("Get ", $descr, " as hex str."),
-            pub fn $get_hex(&mut self) -> RnResult<&str> {
+            pub fn $get_hex(&mut self) -> RnResult<&str, E> {
                 self.send_raw_command_str(&[concat!("mac get ", $field)])
             }
         }
 
         doc_comment! {
             concat!("Get ", $descr, " bytes."),
-            pub fn $get_slice(&mut self) -> RnResult<[u8; $bytes]> {
+            pub fn $get_slice(&mut self) -> RnResult<[u8; $bytes], E> {
                 let hex = self.$get_hex()?;
                 let mut buf = [0; $bytes];
                 base16::decode_slice(hex, &mut buf).map_err(|_| Error::ParsingError)?;
@@ -844,7 +844,7 @@ where
     /// The LoRaWAN Class A protocol configuration savable parameters are:
     /// `band`, `deveui`, `appeui`, `appkey`, `nwkskey`, `appskey`, `devaddr`
     /// as well as all channel parameters (e.g. frequeny, duty cycle, data).
-    pub fn save_config(&mut self) -> RnResult<()> {
+    pub fn save_config(&mut self) -> RnResult<(), E> {
         self.send_raw_command_ok(&["mac save"])
     }
 
@@ -903,13 +903,13 @@ where
     );
 
     /// Set whether the ADR (adaptive data rate) mechanism is enabled.
-    pub fn set_adr(&mut self, enabled: bool) -> RnResult<()> {
+    pub fn set_adr(&mut self, enabled: bool) -> RnResult<(), E> {
         let state = if enabled { "on" } else { "off" };
         self.send_raw_command_ok(&["mac set adr ", state])
     }
 
     /// Return whether the ADR (adaptive data rate) mechanism is enabled.
-    pub fn get_adr(&mut self) -> RnResult<bool> {
+    pub fn get_adr(&mut self) -> RnResult<bool, E> {
         match self.send_raw_command_str(&["mac get adr"])? {
             "on" => Ok(true),
             "off" => Ok(false),
@@ -918,7 +918,7 @@ where
     }
 
     /// Join the network.
-    pub fn join(&mut self, mode: JoinMode) -> Result<(), JoinError> {
+    pub fn join(&mut self, mode: JoinMode) -> Result<(), JoinError<E>> {
         let mode_str = match mode {
             JoinMode::Otaa => "otaa",
             JoinMode::Abp => "abp",
@@ -953,7 +953,7 @@ where
         mode: ConfirmationMode,
         port: u8,
         data: &str,
-    ) -> Result<Option<Downlink>, TxError> {
+    ) -> Result<Option<Downlink>, TxError<E>> {
         // Validate and parse arguments
         if data.len() % 2 != 0 {
             return Err(TxError::BadParameter);
@@ -1015,7 +1015,7 @@ where
         mode: ConfirmationMode,
         port: u8,
         data: &[u8],
-    ) -> Result<Option<Downlink>, TxError> {
+    ) -> Result<Option<Downlink>, TxError<E>> {
         let mut buf = [0; 256];
         let bytes = base16::encode_config_slice(data, base16::EncodeLower, &mut buf);
         self.transmit_hex(mode, port, from_utf8(&buf[0..bytes])?)
@@ -1028,14 +1028,14 @@ where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
     /// Set the data rate to be used for the following transmissions.
-    pub fn set_data_rate(&mut self, data_rate: DataRateEuCn) -> RnResult<()> {
+    pub fn set_data_rate(&mut self, data_rate: DataRateEuCn) -> RnResult<(), E> {
         self.send_raw_command_ok(&["mac set dr ", data_rate.into()])
     }
 
     /// Return the currently configured data rate.
-    pub fn get_data_rate(&mut self) -> RnResult<DataRateEuCn> {
+    pub fn get_data_rate(&mut self) -> RnResult<DataRateEuCn, E> {
         let dr = self.send_raw_command_str(&["mac get dr"])?;
-        DataRateEuCn::try_from(dr)
+        Ok(DataRateEuCn::try_from(dr)?)
     }
 }
 
@@ -1045,14 +1045,14 @@ where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
     /// Set the data rate to be used for the following transmissions.
-    pub fn set_data_rate(&mut self, data_rate: DataRateEuCn) -> RnResult<()> {
+    pub fn set_data_rate(&mut self, data_rate: DataRateEuCn) -> RnResult<(), E> {
         self.send_raw_command_ok(&["mac set dr ", data_rate.into()])
     }
 
     /// Return the currently configured data rate.
-    pub fn get_data_rate(&mut self) -> RnResult<DataRateEuCn> {
+    pub fn get_data_rate(&mut self) -> RnResult<DataRateEuCn, E> {
         let dr = self.send_raw_command_str(&["mac get dr"])?;
-        DataRateEuCn::try_from(dr)
+        Ok(DataRateEuCn::try_from(dr)?)
     }
 }
 
@@ -1062,14 +1062,14 @@ where
     S: serial::Read<u8, Error = E> + serial::Write<u8, Error = E>,
 {
     /// Set the data rate to be used for the following transmissions.
-    pub fn set_data_rate(&mut self, data_rate: DataRateUs) -> RnResult<()> {
+    pub fn set_data_rate(&mut self, data_rate: DataRateUs) -> RnResult<(), E> {
         self.send_raw_command_ok(&["mac set dr ", data_rate.into()])
     }
 
     /// Return the currently configured data rate.
-    pub fn get_data_rate(&mut self) -> RnResult<DataRateUs> {
+    pub fn get_data_rate(&mut self) -> RnResult<DataRateUs, E> {
         let dr = self.send_raw_command_str(&["mac get dr"])?;
-        DataRateUs::try_from(dr)
+        Ok(DataRateUs::try_from(dr)?)
     }
 }
 
@@ -1679,7 +1679,10 @@ mod tests {
             let mut rn = rn2483_868(mock.clone());
 
             // Errors while reading are propagated
-            assert_eq!(rn.ensure_known_state().unwrap_err(), Error::SerialRead);
+            assert_eq!(
+                rn.ensure_known_state().unwrap_err(),
+                Error::SerialRead(MockError::Io(ErrorKind::BrokenPipe))
+            );
 
             mock.done();
         }

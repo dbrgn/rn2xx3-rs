@@ -2,13 +2,16 @@
 
 use core::str::Utf8Error;
 
+/// A response could not be parsed.
+pub struct ParsingError {}
+
 /// A collection of errors that can occur.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Error {
+pub enum Error<SerialError> {
     /// Could not read from serial port.
-    SerialRead,
+    SerialRead(SerialError),
     /// Could not write to serial port.
-    SerialWrite,
+    SerialWrite(SerialError),
     /// Read buffer is too small.
     /// This is a bug, please report it on GitHub!
     ReadBufferTooSmall,
@@ -26,15 +29,21 @@ pub enum Error {
     InvalidState,
 }
 
-impl From<Utf8Error> for Error {
+impl<SerialError> From<Utf8Error> for Error<SerialError> {
     fn from(_: Utf8Error) -> Self {
         Error::EncodingError
     }
 }
 
+impl<SerialError> From<ParsingError> for Error<SerialError> {
+    fn from(_: ParsingError) -> Self {
+        Error::ParsingError
+    }
+}
+
 /// Errors that can occur during the join procedure.
 #[derive(Debug, PartialEq, Eq)]
-pub enum JoinError {
+pub enum JoinError<SerialError> {
     /// Invalid join mode. This indicates a bug in the driver and should be
     /// reported on GitHub.
     BadParameter,
@@ -55,16 +64,16 @@ pub enum JoinError {
     /// Unknown response.
     UnknownResponse,
     /// Another error occurred.
-    Other(Error),
+    Other(Error<SerialError>),
 }
 
-impl From<Error> for JoinError {
-    fn from(other: Error) -> Self {
+impl<SerialError> From<Error<SerialError>> for JoinError<SerialError> {
+    fn from(other: Error<SerialError>) -> Self {
         JoinError::Other(other)
     }
 }
 
-impl From<Utf8Error> for JoinError {
+impl<SerialError> From<Utf8Error> for JoinError<SerialError> {
     fn from(_: Utf8Error) -> Self {
         JoinError::Other(Error::EncodingError)
     }
@@ -72,7 +81,7 @@ impl From<Utf8Error> for JoinError {
 
 /// Errors that can occur during the transmit procedure.
 #[derive(Debug, PartialEq, Eq)]
-pub enum TxError {
+pub enum TxError<SerialError> {
     /// Invalid type, port or data.
     BadParameter,
     /// Network not joined.
@@ -95,20 +104,20 @@ pub enum TxError {
     /// Unknown response.
     UnknownResponse,
     /// Another error occurred.
-    Other(Error),
+    Other(Error<SerialError>),
 }
 
-impl From<Error> for TxError {
-    fn from(other: Error) -> Self {
+impl<SerialError> From<Error<SerialError>> for TxError<SerialError> {
+    fn from(other: Error<SerialError>) -> Self {
         TxError::Other(other)
     }
 }
 
-impl From<Utf8Error> for TxError {
+impl<SerialError> From<Utf8Error> for TxError<SerialError> {
     fn from(_: Utf8Error) -> Self {
         TxError::Other(Error::EncodingError)
     }
 }
 
 /// A `Result<T, Error>`.
-pub type RnResult<T> = Result<T, Error>;
+pub type RnResult<T, SerialError> = Result<T, Error<SerialError>>;

@@ -5,7 +5,7 @@ use crate::errors::{Error, RnResult};
 /// Convert a byte to a decimal string.
 ///
 /// If the buffer is too small, `Error::BadParameter` is returned.
-pub(crate) fn u8_to_str(val: u8, buf: &mut [u8]) -> RnResult<&str> {
+pub(crate) fn u8_to_str<SerialError>(val: u8, buf: &mut [u8]) -> RnResult<&str, SerialError> {
     let chars = match val {
         0..=9 => 1,
         10..=99 => 2,
@@ -75,7 +75,7 @@ mod tests {
         fn all_digits() {
             let mut buf = [0; 3];
             for i in 0..=255 {
-                let string = u8_to_str(i, &mut buf).unwrap();
+                let string = u8_to_str::<()>(i, &mut buf).unwrap();
                 assert_eq!(string, &std::format!("{}", i));
             }
         }
@@ -86,14 +86,14 @@ mod tests {
             let mut buf2 = [0; 2];
             let mut buf3 = [0; 3];
 
-            assert!(u8_to_str(9, &mut buf1).is_ok());
-            assert_eq!(u8_to_str(10, &mut buf1), Err(Error::BadParameter));
+            assert!(u8_to_str::<()>(9, &mut buf1).is_ok());
+            assert_eq!(u8_to_str::<()>(10, &mut buf1), Err(Error::BadParameter));
 
-            assert!(u8_to_str(99, &mut buf2).is_ok());
-            assert_eq!(u8_to_str(100, &mut buf2), Err(Error::BadParameter));
+            assert!(u8_to_str::<()>(99, &mut buf2).is_ok());
+            assert_eq!(u8_to_str::<()>(100, &mut buf2), Err(Error::BadParameter));
 
-            assert!(u8_to_str(255, &mut buf3).is_ok());
-            assert_eq!(u8_to_str(255, &mut buf2), Err(Error::BadParameter));
+            assert!(u8_to_str::<()>(255, &mut buf3).is_ok());
+            assert_eq!(u8_to_str::<()>(255, &mut buf2), Err(Error::BadParameter));
         }
     }
 
