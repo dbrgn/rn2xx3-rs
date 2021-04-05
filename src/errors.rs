@@ -2,9 +2,6 @@
 
 use core::str::Utf8Error;
 
-/// A response could not be parsed.
-pub struct ParsingError {}
-
 /// A collection of errors that can occur.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error<SerialError> {
@@ -32,12 +29,6 @@ pub enum Error<SerialError> {
 impl<SerialError> From<Utf8Error> for Error<SerialError> {
     fn from(_: Utf8Error) -> Self {
         Error::EncodingError
-    }
-}
-
-impl<SerialError> From<ParsingError> for Error<SerialError> {
-    fn from(_: ParsingError) -> Self {
-        Error::ParsingError
     }
 }
 

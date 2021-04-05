@@ -184,7 +184,7 @@ use core::fmt;
 #[cfg(feature = "logging")]
 use log;
 
-use crate::errors::{Error, JoinError, ParsingError, RnResult, TxError};
+use crate::errors::{Error, JoinError, RnResult, TxError};
 
 const CR: u8 = 0x0d;
 const LF: u8 = 0x0a;
@@ -295,7 +295,7 @@ impl From<DataRateEuCn> for &str {
 }
 
 impl TryFrom<&str> for DataRateEuCn {
-    type Error = ParsingError;
+    type Error = ();
     fn try_from(val: &str) -> Result<Self, Self::Error> {
         match val {
             "0" => Ok(DataRateEuCn::Sf12Bw125),
@@ -305,7 +305,7 @@ impl TryFrom<&str> for DataRateEuCn {
             "4" => Ok(DataRateEuCn::Sf8Bw125),
             "5" => Ok(DataRateEuCn::Sf7Bw125),
             "6" => Ok(DataRateEuCn::Sf7Bw250),
-            _ => Err(ParsingError {}),
+            _ => Err(()),
         }
     }
 }
@@ -342,7 +342,7 @@ impl From<DataRateUs> for &str {
 }
 
 impl TryFrom<&str> for DataRateUs {
-    type Error = ParsingError;
+    type Error = ();
     fn try_from(val: &str) -> Result<Self, Self::Error> {
         match val {
             "0" => Ok(DataRateUs::Sf10Bw125),
@@ -350,7 +350,7 @@ impl TryFrom<&str> for DataRateUs {
             "2" => Ok(DataRateUs::Sf8Bw125),
             "3" => Ok(DataRateUs::Sf7Bw125),
             "4" => Ok(DataRateUs::Sf8Bw500),
-            _ => Err(ParsingError {}),
+            _ => Err(()),
         }
     }
 }
@@ -414,7 +414,7 @@ where
     /// **Note:** For performance reasons, the `sleep` flag is not being
     /// checked here. Make sure not to call this method while in sleep mode.
     fn write_byte(&mut self, byte: u8) -> RnResult<(), E> {
-        block!(self.serial.write(byte)).map_err(|e| Error::SerialWrite(e))
+        block!(self.serial.write(byte)).map_err(Error::SerialWrite)
     }
 
     /// Ensure that the device is not currently in sleep mode.
@@ -446,7 +446,7 @@ where
 
     /// Read a single byte from the serial port.
     fn read_byte(&mut self) -> RnResult<u8, E> {
-        block!(self.serial.read()).map_err(|e| Error::SerialRead(e))
+        block!(self.serial.read()).map_err(Error::SerialRead)
     }
 
     /// Read a CR/LF terminated line from the serial port.
@@ -1035,7 +1035,7 @@ where
     /// Return the currently configured data rate.
     pub fn get_data_rate(&mut self) -> RnResult<DataRateEuCn, E> {
         let dr = self.send_raw_command_str(&["mac get dr"])?;
-        Ok(DataRateEuCn::try_from(dr)?)
+        DataRateEuCn::try_from(dr).map_err(|_| Error::ParsingError)
     }
 }
 
@@ -1052,7 +1052,7 @@ where
     /// Return the currently configured data rate.
     pub fn get_data_rate(&mut self) -> RnResult<DataRateEuCn, E> {
         let dr = self.send_raw_command_str(&["mac get dr"])?;
-        Ok(DataRateEuCn::try_from(dr)?)
+        DataRateEuCn::try_from(dr).map_err(|_| Error::ParsingError)
     }
 }
 
@@ -1069,7 +1069,7 @@ where
     /// Return the currently configured data rate.
     pub fn get_data_rate(&mut self) -> RnResult<DataRateUs, E> {
         let dr = self.send_raw_command_str(&["mac get dr"])?;
-        Ok(DataRateUs::try_from(dr)?)
+        DataRateUs::try_from(dr).map_err(|_| Error::ParsingError)
     }
 }
 
