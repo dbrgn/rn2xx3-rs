@@ -5,7 +5,7 @@ use crate::errors::{Error, RnResult};
 /// Convert a byte to a decimal string.
 ///
 /// If the buffer is too small, `Error::BadParameter` is returned.
-pub(crate) fn u8_to_str<SerialError>(val: u8, buf: &mut [u8]) -> RnResult<&str, SerialError> {
+pub(crate) fn u8_to_str<S>(val: u8, buf: &mut [u8]) -> RnResult<&str, S> {
     let chars = match val {
         0..=9 => 1,
         10..=99 => 2,
