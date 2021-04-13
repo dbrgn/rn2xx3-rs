@@ -4,11 +4,11 @@ use core::str::Utf8Error;
 
 /// A collection of errors that can occur.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Error {
+pub enum Error<S> {
     /// Could not read from serial port.
-    SerialRead,
+    SerialRead(S),
     /// Could not write to serial port.
-    SerialWrite,
+    SerialWrite(S),
     /// Read buffer is too small.
     /// This is a bug, please report it on GitHub!
     ReadBufferTooSmall,
@@ -26,7 +26,7 @@ pub enum Error {
     InvalidState,
 }
 
-impl From<Utf8Error> for Error {
+impl<S> From<Utf8Error> for Error<S> {
     fn from(_: Utf8Error) -> Self {
         Error::EncodingError
     }
@@ -34,7 +34,7 @@ impl From<Utf8Error> for Error {
 
 /// Errors that can occur during the join procedure.
 #[derive(Debug, PartialEq, Eq)]
-pub enum JoinError {
+pub enum JoinError<S> {
     /// Invalid join mode. This indicates a bug in the driver and should be
     /// reported on GitHub.
     BadParameter,
@@ -55,16 +55,16 @@ pub enum JoinError {
     /// Unknown response.
     UnknownResponse,
     /// Another error occurred.
-    Other(Error),
+    Other(Error<S>),
 }
 
-impl From<Error> for JoinError {
-    fn from(other: Error) -> Self {
+impl<S> From<Error<S>> for JoinError<S> {
+    fn from(other: Error<S>) -> Self {
         JoinError::Other(other)
     }
 }
 
-impl From<Utf8Error> for JoinError {
+impl<S> From<Utf8Error> for JoinError<S> {
     fn from(_: Utf8Error) -> Self {
         JoinError::Other(Error::EncodingError)
     }
@@ -72,7 +72,7 @@ impl From<Utf8Error> for JoinError {
 
 /// Errors that can occur during the transmit procedure.
 #[derive(Debug, PartialEq, Eq)]
-pub enum TxError {
+pub enum TxError<S> {
     /// Invalid type, port or data.
     BadParameter,
     /// Network not joined.
@@ -95,20 +95,20 @@ pub enum TxError {
     /// Unknown response.
     UnknownResponse,
     /// Another error occurred.
-    Other(Error),
+    Other(Error<S>),
 }
 
-impl From<Error> for TxError {
-    fn from(other: Error) -> Self {
+impl<S> From<Error<S>> for TxError<S> {
+    fn from(other: Error<S>) -> Self {
         TxError::Other(other)
     }
 }
 
-impl From<Utf8Error> for TxError {
+impl<S> From<Utf8Error> for TxError<S> {
     fn from(_: Utf8Error) -> Self {
         TxError::Other(Error::EncodingError)
     }
 }
 
 /// A `Result<T, Error>`.
-pub type RnResult<T> = Result<T, Error>;
+pub type RnResult<T, S> = Result<T, Error<S>>;
