@@ -15,6 +15,11 @@ Possible log types:
 ### Unreleased
 
 
+### v0.2.1 (2021-08-31)
+
+- [added] Add methods to query and update frame counters (#24)
+- [added] Expose low-level serial errors (#23)
+
 ### v0.2.0 (2020-06-23)
 
 - [added] Add `ensure_known_state` method (#22)
