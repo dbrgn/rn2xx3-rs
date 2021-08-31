@@ -29,4 +29,8 @@ fn main() {
     println!("    Version: {}", version);
     let vdd = rn.vdd().expect("Could not read vdd");
     println!("Vdd voltage: {} mV", vdd);
+    let upctr = rn.get_upctr().expect("Could not read up counter");
+    println!("     Up Ctr: {}", upctr);
+    let dnctr = rn.get_dnctr().expect("Could not read down counter");
+    println!("   Down Ctr: {}", dnctr);
 }

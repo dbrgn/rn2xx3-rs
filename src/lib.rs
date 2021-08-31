@@ -917,6 +917,30 @@ where
         }
     }
 
+    /// Set the up frame counter.
+    pub fn set_upctr(&mut self, upctr: u32) -> RnResult<(), E> {
+        let mut buf = [0u8; 10];
+        self.send_raw_command_ok(&["mac set upctr ", upctr.numtoa_str(10, &mut buf)])
+    }
+
+    /// Get the up frame counter.
+    pub fn get_upctr(&mut self) -> RnResult<u32, E> {
+        let ctr = self.send_raw_command_str(&["mac get upctr"])?;
+        ctr.parse().map_err(|_| Error::ParsingError)
+    }
+
+    /// Set the down frame counter.
+    pub fn set_dnctr(&mut self, dnctr: u32) -> RnResult<(), E> {
+        let mut buf = [0u8; 10];
+        self.send_raw_command_ok(&["mac set dnctr ", dnctr.numtoa_str(10, &mut buf)])
+    }
+
+    /// Get the down frame counter.
+    pub fn get_dnctr(&mut self) -> RnResult<u32, E> {
+        let ctr = self.send_raw_command_str(&["mac get dnctr"])?;
+        ctr.parse().map_err(|_| Error::ParsingError)
+    }
+
     /// Join the network.
     pub fn join(&mut self, mode: JoinMode) -> Result<(), JoinError<E>> {
         let mode_str = match mode {
